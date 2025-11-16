@@ -64,7 +64,7 @@ class Choice(models.Model):   # for mcq only
 class ExamAttempt(models.Model):
     attempt_id = models.CharField(max_length=20, unique=True, editable=False)
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE, null=True)
-    student = models.ForeignKey('auth.User',  on_delete=models.CASCADE) # tobe change later
+    student = models.ForeignKey('auth.User',  on_delete=models.CASCADE) # to be change later
     
     started_at = models.DateTimeField(auto_now_add=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
