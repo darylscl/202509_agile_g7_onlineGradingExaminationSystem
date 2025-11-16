@@ -23,8 +23,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd src/backend
-          pip install -r requirements.txt
+          pip install -r requirement.txt
 
       - name: Run tests
         run: |
