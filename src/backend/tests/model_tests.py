@@ -1,6 +1,6 @@
 import pytest
-from django.utils import timezone
 from django.contrib.auth.models import User
+from django.utils import timezone
 from datetime import timedelta
 from app.models import *
 
@@ -138,14 +138,35 @@ def test_choice_creation():
 @pytest.mark.django_db
 def test_answer_unique_constraint():
     user = User.objects.create(username="student")
-    exam = Exam.objects.create(...)
-    q = ExamQuestion.objects.create(...)
-    attempt = ExamAttempt.objects.create(exam=exam, student=user)
-
-    Answer.objects.create(attempt=attempt, question=q, text_answer="Ans1")
-
+    teacher = User.objects.create(username="teacher")
+    exam = Exam.objects.create(
+        title="Sample Exam",
+        description="Test exam",
+        start_time=timezone.now(),
+        end_time=timezone.now() + timedelta(hours=1),
+        created_by=teacher,
+    )
+    q = ExamQuestion.objects.create(
+        exam=exam,
+        question_text="What is 2+2?",
+        question_type="TEXT",
+        order_no=1,
+    )
+    attempt = ExamAttempt.objects.create(
+        exam=exam,
+        student=user
+    )
+    Answer.objects.create(
+        attempt=attempt,
+        question=q,
+        text_answer="Ans1"
+    )
     with pytest.raises(Exception):
-        Answer.objects.create(attempt=attempt, question=q, text_answer="Ans2")
+        Answer.objects.create(
+            attempt=attempt,
+            question=q,
+            text_answer="Ans2"
+        )
 
 #----- Date logic tests----
 
@@ -188,54 +209,76 @@ def test_exam_is_open_false_after_end():
     assert exam.is_open is False
     
     
-# ---Str methods tests----
-
+# ---Str methods tests----      
 @pytest.mark.django_db
 def test_answer_str():
     user = User.objects.create(username="student")
-    exam = Exam.objects.create(...)
-    question = ExamQuestion.objects.create(...)
+    teacher = User.objects.create(username="teacher")
+
+    exam = Exam.objects.create(
+        title="Exam",
+        description="desc",
+        start_time=timezone.now(),
+        end_time=timezone.now() + timedelta(hours=1),
+        created_by=teacher
+    )
+
+    question = ExamQuestion.objects.create(
+        exam=exam,
+        question_text="Test question",
+        question_type="TEXT"
+    )
+
     attempt = ExamAttempt.objects.create(exam=exam, student=user)
 
     answer = Answer.objects.create(attempt=attempt, question=question)
-    s = str(answer)
 
+    s = str(answer)
     assert "Answer for" in s
     assert "Attempt" in s
     
-    
-@pytest.mark.django_db
-def test_answer_str():
-    user = User.objects.create(username="student")
-    exam = Exam.objects.create(...)
-    question = ExamQuestion.objects.create(...)
-    attempt = ExamAttempt.objects.create(exam=exam, student=user)
 
-    answer = Answer.objects.create(attempt=attempt, question=question)
-    s = str(answer)
-
-    assert "Answer for" in s
-    assert "Attempt" in s
-    
-    
 @pytest.mark.django_db
 def test_choice_str():
-    user = User.objects.create(username="teacher")
-    exam = Exam.objects.create(...)
-    q = ExamQuestion.objects.create(...)
+    teacher = User.objects.create(username="teacher")
+
+    exam = Exam.objects.create(
+        title="Exam",
+        description="desc",
+        start_time=timezone.now(),
+        end_time=timezone.now() + timedelta(hours=1),
+        created_by=teacher
+    )
+
+    q = ExamQuestion.objects.create(
+        exam=exam,
+        question_text="Hello",
+        question_type="MCQ"
+    )
+
     c = Choice.objects.create(choice_id=q, choice_text="Hello", is_correct=False)
 
     assert "Choice for" in str(c)
     
+
 @pytest.mark.django_db
 def test_question_order_default():
-    user = User.objects.create(username="teacher")
-    exam = Exam.objects.create(...)
+    teacher = User.objects.create(username="teacher")
+
+    exam = Exam.objects.create(
+        title="Exam",
+        description="desc",
+        start_time=timezone.now(),
+        end_time=timezone.now() + timedelta(hours=1),
+        created_by=teacher
+    )
+
     q = ExamQuestion.objects.create(
         exam=exam,
         question_text="Hello",
         question_type="TEXT"
     )
+
     assert q.order_no == 1
     
     
