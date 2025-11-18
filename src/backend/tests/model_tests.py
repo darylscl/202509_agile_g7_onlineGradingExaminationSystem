@@ -235,7 +235,7 @@ def test_answer_str():
 
     s = str(answer)
     assert "Answer for" in s
-    assert "Attempt" in ss
+    assert "Attempt" in s
     
 
 @pytest.mark.django_db
