@@ -25,7 +25,12 @@ jobs:
         run: |
           pip install -r requirement.txt
 
-      - name: Run tests
+      - name: Run tests (TDD test)
         run: |
           cd src/backend
           pytest
+
+      - name: Run BOD tests
+        run: |
+          cd src/backend
+          python manage.py behave

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Create Exam{% endblock %}
+{% block content %}
+
+<h2 class="mb-4">Create Exam</h2>
+
+{% if not exam %}
+<div class="card p-4 shadow-sm mb-4">
+    <form method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="create_exam" value="1">
+
+        <div class="mb-3">
+            <label class="form-label">Exam Title</label>
+            <input type="text" name="title" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Description</label>
+            <textarea name="description" class="form-control"></textarea>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Start Time</label>
+            <input type="datetime-local" name="start_time" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">End Time</label>
+            <input type="datetime-local" name="end_time" class="form-control" required>
+        </div>
+
+        <button class="btn btn-primary">Create Exam</button>
+    </form>
+</div>
+
+{% else %}
+<div class="alert alert-success">Exam Created: <strong>{{ exam.exam_id }}</strong></div>
+
+<h3>Add Question</h3>
+
+<div class="card p-4 shadow-sm mb-4">
+    <form method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="add_question" value="1">
+
+        <div class="mb-3">
+            <label class="form-label">Question Text</label>
+            <textarea name="question_text" class="form-control" required></textarea>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Question Type</label>
+            <select name="question_type" id="questionType" class="form-select" required>
+                <option value="TEXT">Text</option>
+                <option value="MCQ">MCQ</option>
+            </select>
+        </div>
+
+        <div id="mcqChoices" style="display:none;">
+            <label class="form-label">Enter Choices</label>
+
+            {% for i in "1234" %}
+            <div class="input-group mb-2">
+                <span class="input-group-text">Choice {{ forloop.counter }}</span>
+                <input type="text" name="choice_text" class="form-control">
+
+                <input type="radio" name="correct_choice" value="{{ forloop.counter0 }}">
+                <span class="ms-2">Correct</span>
+            </div>
+            {% endfor %}
+        </div>
+
+        <button class="btn btn-success">Add Question</button>
+    </form>
+</div>
+
+<h3>Questions Added</h3>
+<ul class="list-group">
+    {% for q in questions %}
+    <li class="list-group-item">
+        Q{{ q.id }} — {{ q.question_text }} ({{ q.question_type }})
+    </li>
+    {% empty %}
+    <li class="list-group-item text-muted">No questions added yet.</li>
+    {% endfor %}
+</ul>
+
+{% endif %}
+
+<script>
+document.getElementById("questionType").addEventListener("change", function() {
+    document.getElementById("mcqChoices").style.display =
+        this.value === "MCQ" ? "block" : "none";
+});
+</script>
+
+{% endblock %}
