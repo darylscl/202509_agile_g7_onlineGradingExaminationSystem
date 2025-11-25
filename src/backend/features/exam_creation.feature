@@ -1,5 +1,5 @@
 Feature: Create Exam Creation functionality for Instructor
-     s an Instructor, I want to create exam questions with either type, 
+    As an Instructor, I want to create exam questions with either type, 
     MCQ with 4 choices for the question or TEXT question, 
     so that I can let students take the exam 
 
