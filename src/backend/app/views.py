@@ -13,7 +13,9 @@ def homepage(request):
 def is_instructor(user):
     return user.is_staff  # treat staff as instructor currently
 
-default_user = User.objects.first()
+def get_default_user():
+    from django.contrib.auth.models import User
+    return User.objects.first()
 
 # User viewset
 
@@ -27,7 +29,7 @@ default_user = User.objects.first()
 def exam_list(request):
     exams = Exam.objects.filter(created_by=request.user).order_by("-created_at")
     return render(
-        request, "app/instructor/exam_list.html", {"exam": exams}
+        request, "app/instructor/exam_list.html", {"exams": exams}
     )  # url need to change later when frontend comes in
 
 
@@ -50,7 +52,7 @@ def exam_create(request):
             description=description,
             start_time=start_time,
             end_time=end_time,
-            created_by=default_user
+            created_by=get_default_user(),
         )
 
         return redirect(f"/instructor/exams/create/?exam_id={exam.exam_id}")
