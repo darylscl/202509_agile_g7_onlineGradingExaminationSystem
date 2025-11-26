@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Your Exams</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Title</th>
+            <th>Questions</th>
+            <th>Start</th>
+            <th>End</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for exam in exams %}
+        <tr>
+            <td>{{ exam.exam_id }}</td>
+            <td>{{ exam.title }}</td>
+            <td>{{ exam.questions.count }} Question{% if exam.questions.count != 1 %}s{% endif %}</td>
+            <td>{{ exam.start_time|date:"Y-m-d" }}</td>
+            <td>{{ exam.end_time|date:"Y-m-d" }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

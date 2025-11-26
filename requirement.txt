@@ -1,3 +1,5 @@
 django
 pytest 
 pytest-django
+behave
+behave-django
