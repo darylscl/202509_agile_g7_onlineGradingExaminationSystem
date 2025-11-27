@@ -5,6 +5,8 @@ from app.views import *
 from django.contrib.auth.models import User
 import pytest
 
+# TDD test need to let user to know where is the failed test and what is the failed test. A summary like that
+
 
 # Exam module test
 @pytest.mark.django_db
