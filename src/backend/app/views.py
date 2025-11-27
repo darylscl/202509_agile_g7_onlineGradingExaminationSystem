@@ -264,7 +264,7 @@ def take_exam(request, exam_id):
     )
     
     if attempt.submitted:
-        return render(request, "app/student/exam_already_done.html", {
+        return render(request, "app/student/exam_done.html", {
             "exam": exam,
             "attempt": attempt
         })
