@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Edit Question{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <h2 class="fw-bold mb-4">Edit Question — {{ question.exam.exam_id }}</h2>
+
+    <div class="card shadow-sm border-0 rounded-4 p-4 mx-auto" style="max-width: 800px;">
+
+        <form method="POST">
+            {% csrf_token %}
+
+            <!-- Question Text -->
+            <div class="mb-4">
+                <label class="form-label fw-semibold">Question Text</label>
+                <textarea name="question_text" class="form-control form-control-lg"
+                          rows="4" required>{{ question.question_text }}</textarea>
+            </div>
+
+            <!-- Question Type -->
+            <div class="mb-4">
+                <label class="form-label fw-semibold">Question Type</label>
+                <select name="question_type" class="form-select form-select-lg" id="qtype">
+                    <option value="MCQ" {% if question.question_type == "MCQ" %}selected{% endif %}>MCQ</option>
+                    <option value="TEXT" {% if question.question_type == "TEXT" %}selected{% endif %}>Text</option>
+                </select>
+            </div>
+
+            <!-- MCQ Choices Section -->
+            <div id="mcq-section" {% if question.question_type != "MCQ" %}style="display:none"{% endif %}>
+
+                <label class="form-label fw-semibold">Choices (Select the correct one)</label>
+
+                {% for choice in question.choices.all %}
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control"
+                               name="choice_text_{{ forloop.counter0 }}"
+                               value="{{ choice.choice_text }}" required>
+
+                        <div class="input-group-text">
+                            <input type="radio" name="correct_choice"
+                                   value="{{ forloop.counter0 }}"
+                                   {% if choice.is_correct %}checked{% endif %}>
+                        </div>
+                    </div>
+                {% empty %}
+
+                    <!-- Generate 4 empty choices if converting from TEXT → MCQ -->
+                    {% for i in "0123" %}
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control"
+                               name="choice_text_{{ forloop.counter0 }}"
+                               placeholder="Choice {{ forloop.counter }}" required>
+
+                        <div class="input-group-text">
+                            <input type="radio" name="correct_choice" value="{{ forloop.counter0 }}">
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% endfor %}
+            </div>
+
+            <!-- Buttons -->
+            <div class="d-flex justify-content-between pt-2">
+                <button type="submit" class="btn btn-success btn-lg px-5">
+                    Save Changes
+                </button>
+
+                <a href="{% url 'instructor_exam_detail' question.exam.exam_id %}"
+                   class="btn btn-outline-danger btn-lg px-4">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Show/hide MCQ section when question type changes
+    document.getElementById("qtype").addEventListener("change", function() {
+        if (this.value === "MCQ") {
+            document.getElementById("mcq-section").style.display = "block";
+        } else {
+            document.getElementById("mcq-section").style.display = "none";
+        }
+    });
+</script>
+
+{% endblock %}

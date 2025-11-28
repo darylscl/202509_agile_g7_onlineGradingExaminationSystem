@@ -21,7 +21,7 @@ from app.models import *
 # -----Exam models / id generation-------
 @pytest.mark.django_db
 def test_exam_custom_id_generated():
-    user = User.objects.create(username="teacher")
+    user = User.objects.create(username="teacher", is_staff=True)
 
     exam = Exam.objects.create(
         title="Sample Exam",
@@ -36,7 +36,7 @@ def test_exam_custom_id_generated():
     
 @pytest.mark.django_db
 def test_exam_id_increments():
-    user = User.objects.create(username="teacher")
+    user = User.objects.create(username="teacher", is_staff=True)
 
     exam1 = Exam.objects.create(
         title="Exam 1",
@@ -75,7 +75,7 @@ def test_attempt_custom_id_generated():
     
 @pytest.mark.django_db
 def test_exam_str():
-    user = User.objects.create(username="teacher")
+    user = User.objects.create(username="teacher", is_staff=True)
     exam = Exam.objects.create(
         title="My Exam",
         description="desc",
@@ -90,7 +90,7 @@ def test_exam_str():
 
 @pytest.mark.django_db
 def test_question_str():
-    user = User.objects.create(username="teacher")
+    user = User.objects.create(username="teacher", is_staff=True)
     exam = Exam.objects.create(
         title="Exam",
         description="desc",
@@ -110,7 +110,7 @@ def test_question_str():
     
 @pytest.mark.django_db
 def test_choice_creation():
-    user = User.objects.create(username="teacher")
+    user = User.objects.create(username="teacher", is_staff=True)
     exam = Exam.objects.create(
         title="Exam",
         description="desc",
@@ -172,7 +172,7 @@ def test_answer_unique_constraint():
 
 @pytest.mark.django_db
 def test_exam_is_open_true():
-    user = User.objects.create(username="teacher")
+    user = User.objects.create(username="teacher", is_staff=True)
     exam = Exam.objects.create(
         title="Exam",
         description="desc",
@@ -185,7 +185,7 @@ def test_exam_is_open_true():
 
 @pytest.mark.django_db
 def test_exam_is_open_false_before_start():
-    user = User.objects.create(username="teacher")
+    user = User.objects.create(username="teacher", is_staff=True)
     exam = Exam.objects.create(
         title="Exam",
         description="desc",
@@ -198,7 +198,7 @@ def test_exam_is_open_false_before_start():
 
 @pytest.mark.django_db
 def test_exam_is_open_false_after_end():
-    user = User.objects.create(username="teacher")
+    user = User.objects.create(username="teacher", is_staff=True)
     exam = Exam.objects.create(
         title="Exam",
         description="desc",
@@ -285,7 +285,7 @@ def test_question_order_default():
 # --- Required fields test ---
 @pytest.mark.django_db
 def test_exam_requires_title():
-    user = User.objects.create(username="teacher")
+    user = User.objects.create(username="teacher", is_staff=True)
 
     with pytest.raises(Exception):
         Exam.objects.create(

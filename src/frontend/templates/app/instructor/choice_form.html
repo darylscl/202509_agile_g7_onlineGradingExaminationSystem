@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Choice{% endblock %}
+
+{% block content %}
+<h2>Edit Choice for Question</h2>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="POST">
+            {% csrf_token %}
+
+            <p><strong>Exam:</strong> {{ choice.choice_id.exam.title }} ({{ choice.choice_id.exam.exam_id }})</p>
+            <p><strong>Question:</strong> {{ choice.choice_id.question_text }}</p>
+
+            <div class="mb-3">
+                <label class="form-label">Choice Text</label>
+                <input type="text" name="choice_text" class="form-control"
+                       value="{{ choice.choice_text }}" required>
+            </div>
+
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="is_correct"
+                       id="correctChoice"
+                       {% if choice.is_correct %}checked{% endif %}>
+                <label class="form-check-label" for="correctChoice">
+                    Mark as Correct Answer
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-success">Save Changes</button>
+
+            <a href="{% url 'instructor_exam_detail' choice.choice_id.exam.exam_id %}"
+               class="btn btn-secondary ms-2">
+                Cancel
+            </a>
+        </form>
+    </div>
+</div>
+{% endblock %}

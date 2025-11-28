@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Edit Exam{% endblock %}
+
+{% block content %}
+
+<!-- Background Wrapper -->
+<div class="exam-bg py-5">
+    <div class="container">
+
+        <!-- Header -->
+        <h2 class="fw-bold text-white text-center mb-4">
+            Edit Exam — {{ exam.exam_id }}
+        </h2>
+
+        <!-- Form Card -->
+        <div class="card p-5 shadow-lg border-0 rounded-4 mx-auto"
+            style="max-width: 900px; backdrop-filter: blur(4px);">
+
+            <form method="POST">
+                {% csrf_token %}
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Title</label>
+                    <input type="text" name="title" class="form-control form-control-lg" value="{{ exam.title }}"
+                        required>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Description</label>
+                    <textarea name="description" class="form-control" rows="4">{{ exam.description }}</textarea>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-semibold">Start Time</label>
+                        <input type="datetime-local" name="start_time" class="form-control"
+                            value="{{ exam.start_time|date:'Y-m-d\\TH:i' }}" required>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-semibold">End Time</label>
+                        <input type="datetime-local" name="end_time" class="form-control"
+                            value="{{ exam.end_time|date:'Y-m-d\\TH:i' }}" required>
+                    </div>
+                </div>
+
+                <!-- Buttons -->
+                <div class="d-flex justify-content-between mt-4">
+                    <button type="submit" class="btn btn-success btn-lg px-5">
+                        Save Changes
+                    </button>
+
+                    <a href="{% url 'instructor_exam_detail' exam.exam_id %}" class="btn btn-outline-danger btn-lg px-4">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+
+        </div>
+
+    </div>
+</div>
+
+<style>
+    .exam-bg {
+        background: radial-gradient(circle at top, #233046, #0d1b2a 60%);
+        min-height: 100vh;
+        padding-top: 40px;
+        padding-bottom: 40px;
+    }
+
+    .form-control,
+    .form-select,
+    textarea {
+        border-radius: 12px !important;
+        padding: 12px 14px !important;
+        font-size: 1rem;
+    }
+
+    .card {
+        border-radius: 16px !important;
+    }
+
+    .btn-primary {
+        background: #1e66f5;
+        border: none;
+        padding: 12px 30px;
+        font-size: 1.2rem;
+        border-radius: 12px;
+    }
+
+    .btn-primary:hover {
+        background: #1554d1;
+    }
+
+    .btn-outline-light {
+        border-radius: 12px;
+        padding: 12px 28px;
+    }
+
+    .btn-outline-light:hover {
+        background: #ffffff25;
+    }
+</style>
+
+{% endblock %}

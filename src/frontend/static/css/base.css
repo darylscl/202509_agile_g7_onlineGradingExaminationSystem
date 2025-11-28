@@ -1,0 +1,26 @@
+.nav-link-hover:hover {
+    color: #4cc9f0 !important;
+    transition: 0.2s;
+}
+
+.nav-dropdown-hover:hover {
+    background-color: #415a77 !important;
+    color: #ffffff !important;
+    transition: 0.2s;
+}
+
+.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.sortable:hover {
+    background-color: #253044 !important;
+}
+
+.sort-icon {
+    margin-left: 6px;
+    font-size: 0.75rem;
+    opacity: 0.8;
+}
+
