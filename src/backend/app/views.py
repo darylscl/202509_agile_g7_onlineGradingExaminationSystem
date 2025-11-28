@@ -274,3 +274,4 @@ def exam_result(request, attempt_id):
         "app/student/exam_result.html",
         {"attempt": attempt, "answers": answers},
     )
+

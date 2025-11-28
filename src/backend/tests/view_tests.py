@@ -240,3 +240,124 @@ def test_exam_delete_view(client):
     response = client.post(f"/instructor/exams/{exam.exam_id}/delete/")
     assert response.status_code == 302
     assert Exam.objects.filter(exam_id=exam.exam_id).exists() is False
+
+# test Student takes the online exam during the valid schedule
+@pytest.mark.django_db
+def test_student_takes_exam_during_valid_schedule(client):
+    # teacher (exam owner)
+    teacher = User.objects.create(username="teacher")
+
+    # student
+    student = User.objects.create_user(username="student", password="pass")
+
+    # exam is open now
+    now = timezone.now()
+    exam = Exam.objects.create(
+        title="Sample Exam",
+        description="desc",
+        start_time=now - timedelta(minutes=10),
+        end_time=now + timedelta(minutes=50),
+        created_by=teacher,
+    )
+
+    # MCQ question
+    q1 = ExamQuestion.objects.create(
+        exam=exam,
+        question_text="2 + 2 = ?",
+        question_type="MCQ",
+        order_no=1,
+    )
+    wrong = Choice.objects.create(choice_id=q1, choice_text="3", is_correct=False)
+    correct = Choice.objects.create(choice_id=q1, choice_text="4", is_correct=True)
+
+    # TEXT question
+    q2 = ExamQuestion.objects.create(
+        exam=exam,
+        question_text="Explain your answer",
+        question_type="TEXT",
+        order_no=2,
+    )
+
+    # student logs in
+    client.force_login(student)
+
+    # GET – student can access the exam page while it's open
+    response = client.get(f"/student/exams/{exam.exam_id}/take/")
+    assert response.status_code == 200
+    assert b"2 + 2" in response.content  # question shown
+
+    # POST – student submits answers
+    post_data = {
+        f"q_{q1.id}": str(correct.id),                  # MCQ answer
+        f"q_{q2.id}": "Because 2+2=4, obviously.",      # TEXT answer
+    }
+    response = client.post(f"/student/exams/{exam.exam_id}/take/", data=post_data)
+
+    # should redirect to exam result page
+    assert response.status_code == 302
+
+    # attempt created and marked as submitted
+    attempt = ExamAttempt.objects.get(exam=exam, student=student)
+    assert attempt.submitted is True
+    assert attempt.score == 1  # 1 MCQ question, answered correctly
+
+    # MCQ answer saved and marked
+    a1 = Answer.objects.get(attempt=attempt, question=q1)
+    assert a1.selected_choice == correct
+    assert a1.marks == 1
+
+    # TEXT answer saved
+    a2 = Answer.objects.get(attempt=attempt, question=q2)
+    assert a2.text_answer == "Because 2+2=4, obviously."
+
+@pytest.mark.django_db
+def test_student_sees_only_currently_available_exams(client):
+    # create a student user & log in
+    student = User.objects.create_user(username="student1", password="pass")
+    client.force_login(student)
+
+    # teacher (creator) - adjust if your Exam model doesn't need this
+    teacher = User.objects.create(username="teacher1")
+
+    now = timezone.now()
+
+    # exam that already ended
+    past_exam = Exam.objects.create(
+        title="Past Exam",
+        description="Already finished",
+        start_time=now - timedelta(days=2),
+        end_time=now - timedelta(days=1),
+        created_by=teacher,
+    )
+
+    # exam that hasn't started yet
+    future_exam = Exam.objects.create(
+        title="Future Exam",
+        description="Not started yet",
+        start_time=now + timedelta(days=1),
+        end_time=now + timedelta(days=2),
+        created_by=teacher,
+    )
+
+    # exam that is currently available (start <= now <= end)
+    current_exam = Exam.objects.create(
+        title="Current Exam",
+        description="Happening now",
+        start_time=now - timedelta(hours=1),
+        end_time=now + timedelta(hours=1),
+        created_by=teacher,
+    )
+
+    # call the view
+    response = client.get("/student/exams/available/")
+
+    assert response.status_code == 200
+
+    content = response.content
+
+    # current exam should be visible
+    assert b"Current Exam" in content
+
+    # past and future exams should NOT appear
+    assert b"Past Exam" not in content
+    assert b"Future Exam" not in content
