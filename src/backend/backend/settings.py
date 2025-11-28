@@ -132,3 +132,7 @@ STATICFILES_DIRS = [
 BEHAVE_SETTINGS = {
     "paths": ["features"], 
 }
+
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/'
+

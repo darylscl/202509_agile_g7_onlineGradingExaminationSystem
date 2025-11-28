@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.utils import timezone
 from django.urls import reverse
 from django.contrib.auth.models import User #default django admin user for now, waiting for user
+from django.contrib.auth import logout
 from .models import *
 
 #To see different page for different user roles
@@ -11,14 +12,24 @@ from .models import *
 
 # Helper function
 def homepage(request):
-    return render(request, "base.html")
+    user = request.user
+
+    if not user.is_authenticated:
+        return render(request, "home_public.html")
+
+    if user.is_staff:
+        return render(request, "app/instructor/dashboard.html")
+
+    return render(request, "app/student/dashboard.html")
+
 
 def is_instructor(user):
     return user.is_staff  # treat staff as instructor currently
 
-def get_default_user():
-    from django.contrib.auth.models import User
-    return User.objects.first()
+
+def custom_logout(request):
+    logout(request)
+    return redirect("/")
 
 # User viewset
 
@@ -27,19 +38,19 @@ def get_default_user():
 # User not yet implemented
 # the url need to change
 
-# @login_required
-# @user_passes_test(is_instructor)
+@login_required
+@user_passes_test(is_instructor)
 def exam_list(request):
-    user = get_default_user()
+    user = request.user
     exams = Exam.objects.filter(created_by=user).order_by("-created_at")
     return render(request, "app/instructor/exam_list.html", {"exams": exams})
  # url need to change later when frontend comes in
 
 
-# @login_required
-# @user_passes_test(is_instructor)
+@login_required
+@user_passes_test(is_instructor)
 def exam_create(request):
-    user = get_default_user()
+    user = request.user
     exam = None
     exam_id = request.GET.get("exam_id")
 
@@ -86,10 +97,10 @@ def exam_create(request):
 
 
 
-# @login_required
-# @user_passes_test(is_instructor)
+@login_required
+@user_passes_test(is_instructor)
 def exam_detail(request, exam_id):
-    user = get_default_user()
+    user = request.user
     exam = get_object_or_404(Exam, exam_id=exam_id, created_by=user)
     questions = exam.questions.prefetch_related("choices").order_by("order_no")
 
@@ -98,10 +109,10 @@ def exam_detail(request, exam_id):
     })
 
 
-# @login_required
-# @user_passes_test(is_instructor)
+@login_required
+@user_passes_test(is_instructor)
 def exam_update(request, exam_id):
-    user = get_default_user()
+    user = request.user
     exam = get_object_or_404(Exam, exam_id=exam_id, created_by=user)
 
     if request.method == "POST":
@@ -117,10 +128,10 @@ def exam_update(request, exam_id):
 
 
 
-# @login_required
-# @user_passes_test(is_instructor)
+@login_required
+@user_passes_test(is_instructor)
 def exam_delete(request, exam_id):
-    user = get_default_user()
+    user = request.user
     exam = get_object_or_404(Exam, exam_id=exam_id, created_by=user)
     exam.delete()
     return redirect("instructor_exam_list")
@@ -128,10 +139,10 @@ def exam_delete(request, exam_id):
 
 
 
-# @login_required
-# @user_passes_test(is_instructor)
+@login_required
+@user_passes_test(is_instructor)
 def question_create(request, exam_id):
-    user = get_default_user()
+    user = request.user
     exam = get_object_or_404(Exam, exam_id=exam_id, created_by=user)
 
     if request.method == "POST":
@@ -146,8 +157,8 @@ def question_create(request, exam_id):
     return render(request, "app/instructor/question_form.html", {"exam": exam})
 
 
-# @login_required
-# @user_passes_test(is_instructor)
+@login_required
+@user_passes_test(is_instructor)
 def question_update(request, question_id):
     question = get_object_or_404(ExamQuestion, id=question_id)
     exam = question.exam
@@ -200,10 +211,10 @@ def question_update(request, question_id):
 
 
 
-# @login_required
-# @user_passes_test(is_instructor)
+@login_required
+@user_passes_test(is_instructor)
 def question_delete(request, exam_id, question_id):
-    user = get_default_user()
+    user = request.user
     exam = get_object_or_404(Exam, exam_id=exam_id, created_by=user)
     question = get_object_or_404(ExamQuestion, id=question_id, exam=exam)
 
@@ -212,8 +223,8 @@ def question_delete(request, exam_id, question_id):
 
 
 
-# @login_required
-# @user_passes_test(is_instructor)
+@login_required
+@user_passes_test(is_instructor)
 def choice_add(request, question_id):
     question = get_object_or_404(ExamQuestion, id=question_id)
 
@@ -228,8 +239,8 @@ def choice_add(request, question_id):
     return render(request, "app/instructor/choice_form.html", {"question": question})
 
 
-# @login_required
-# @user_passes_test(is_instructor)
+@login_required
+@user_passes_test(is_instructor)
 def choice_update(request, choice_id):
     choice = get_object_or_404(Choice, id=choice_id)
 
@@ -243,14 +254,14 @@ def choice_update(request, choice_id):
     return render(request, "app/instructor/choice_form.html", {"choice": choice})
 
 
-#@login_required
+@login_required
 def available_exams(request):
     now = timezone.now()
     exams = Exam.objects.filter(start_time__lte=now, end_time__gte=now)
     return render(request, "app/student/available_exams.html", {"exams": exams})
 
 
-#@login_required
+@login_required
 def take_exam(request, exam_id):
     exam = get_object_or_404(Exam, exam_id=exam_id)
     
@@ -326,7 +337,7 @@ def take_exam(request, exam_id):
     )
 
 
-#@login_required
+@login_required
 def exam_result(request, attempt_id):
     attempt = get_object_or_404(ExamAttempt, attempt_id=attempt_id, student=request.user)
     answers = attempt.answers.select_related("question", "selected_choice")
