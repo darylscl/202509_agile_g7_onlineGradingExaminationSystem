@@ -415,3 +415,49 @@ def test_student_submit_exam_for_processing(client):
     a2 = Answer.objects.get(attempt=attempt, question=q2)
     assert a2.text_answer == "Because 2 + 3 = 5."
 
+@pytest.mark.django_db
+def test_student_can_resume_ongoing_exam_attempt(client):
+    teacher = User.objects.create(username="teacher_resume")
+    student = User.objects.create_user(username="student_resume", password="pass")
+
+    now = timezone.now()
+
+    # exam currently open
+    exam = Exam.objects.create(
+        title="Resume Exam",
+        description="desc",
+        start_time=now - timedelta(minutes=10),
+        end_time=now + timedelta(minutes=50),
+        created_by=teacher,
+    )
+
+    # one question (so page isn't empty)
+    q1 = ExamQuestion.objects.create(
+        exam=exam,
+        question_text="2 + 2 = ?",
+        question_type="MCQ",
+        order_no=1,
+    )
+    Choice.objects.create(choice_id=q1, choice_text="3", is_correct=False)
+    Choice.objects.create(choice_id=q1, choice_text="4", is_correct=True)
+
+    # existing attempt for this student and exam (ongoing: submitted_at=None)
+    attempt = ExamAttempt.objects.create(exam=exam, student=student)
+    assert attempt.submitted_at is None
+
+    # there must be exactly one attempt before resuming
+    assert ExamAttempt.objects.filter(exam=exam, student=student).count() == 1
+
+    client.force_login(student)
+
+    # student "resumes" by visiting the same take-exam URL again
+    response = client.get(f"/student/exams/{exam.exam_id}/take/")
+
+    # still see the exam page (ongoing)
+    assert response.status_code == 200
+    assert b"2 + 2" in response.content  # question is visible
+
+    # and no new attempt is created; still only one attempt in DB
+    assert ExamAttempt.objects.filter(exam=exam, student=student).count() == 1
+
+
