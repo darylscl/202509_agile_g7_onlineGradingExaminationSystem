@@ -11,7 +11,7 @@ import pytest
 # Exam module test
 @pytest.mark.django_db
 def test_exam_can_be_created_with_user():
-    user = User.objects.create(username="teacher")
+    user = User.objects.create(username="teacher", is_staff=True)
 
     exam = Exam.objects.create(
         title="Sample Exam",
@@ -27,8 +27,8 @@ def test_exam_can_be_created_with_user():
 # ID auto increment 
 @pytest.mark.django_db
 def test_exam_id_increments():
-    user = User.objects.create(username="teacher")
-
+    user = User.objects.create(username="teacher", is_staff=True)
+    
     e1 = Exam.objects.create(
         title="Exam1",
         description="desc",
@@ -50,7 +50,7 @@ def test_exam_id_increments():
 #Question creation  
 @pytest.mark.django_db
 def test_text_question_creation():
-    user = User.objects.create(username="teacher")
+    user = User.objects.create(username="teacher", is_staff=True)
 
     exam = Exam.objects.create(
         title="Exam",
@@ -72,7 +72,7 @@ def test_text_question_creation():
 # MCQ question creation
 @pytest.mark.django_db
 def test_mcq_with_choices():
-    user = User.objects.create(username="teacher")
+    user = User.objects.create(username="teacher", is_staff=True)
     exam = Exam.objects.create(
         title="Exam",
         start_time=timezone.now(),
@@ -95,7 +95,7 @@ def test_mcq_with_choices():
 # unique constraint test
 @pytest.mark.django_db
 def test_answer_unique_per_attempt():
-    user = User.objects.create(username="teacher")
+    user = User.objects.create(username="teacher", is_staff=True)
     exam = Exam.objects.create(
         title="Exam",
         description="desc",
@@ -119,7 +119,7 @@ def test_answer_unique_per_attempt():
 # Exam is open logic
 @pytest.mark.django_db
 def test_exam_is_open_true():
-    user = User.objects.create(username="teacher")
+    user = User.objects.create(username="teacher", is_staff=True)
 
     exam = Exam.objects.create(
         title="Exam",
@@ -134,7 +134,7 @@ def test_exam_is_open_true():
 # Builder test
 @pytest.mark.django_db
 def test_exam_create_and_add_question(client):
-    user = User.objects.create(username="teacher")
+    user = User.objects.create(username="teacher", is_staff=True)
     client.force_login(user)
 
     response = client.post("/instructor/exams/create/", {
@@ -162,7 +162,7 @@ def test_exam_create_and_add_question(client):
 # test listing exam view
 @pytest.mark.django_db
 def test_exam_list_view(client):
-    user = User.objects.create(username="teacher")
+    user = User.objects.create(username="teacher", is_staff=True)
     
     exam1 = Exam.objects.create(
         title="Math Test",
@@ -200,7 +200,7 @@ def test_exam_list_view(client):
 # test edit exam
 @pytest.mark.django_db
 def test_exam_update_view(client):
-    user = User.objects.create(username="teacher")
+    user = User.objects.create(username="teacher", is_staff=True)
     
     # create sample
     exam = Exam.objects.create(
@@ -227,7 +227,7 @@ def test_exam_update_view(client):
 # test delete exam
 @pytest.mark.django_db
 def test_exam_delete_view(client):
-    user = User.objects.create(username="teacher")
+    user = User.objects.create(username="teacher", is_staff=True)
     
     # create sample
     exam = Exam.objects.create(
