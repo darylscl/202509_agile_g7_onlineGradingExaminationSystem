@@ -9,8 +9,9 @@ from datetime import timedelta, datetime
 # Exam creation: Scenario 1
 @given("a logged-in Instructor exists")
 def step_impl(context):
-    context.teacher = User.objects.create_user(username="teacher", password="pass123")
+    context.teacher = User.objects.create_user(username="teacher", password="pass123", is_staff=True)
     context.client = Client()
+    context.client.force_login(context.teacher)
 
 
 @when("the Instructor opens the exam creation page")
@@ -54,8 +55,9 @@ def step_impl(context):
 
 @given("an existing exam created by the Instructor")
 def step_impl(context):
-    context.teacher = User.objects.create_user(username="teacher2", password="pass123")
+    context.teacher = User.objects.create_user(username="teacher2", password="pass123", is_staff=True)
     context.client = Client()
+    context.client.force_login(context.teacher)
     context.exam = Exam.objects.create(
         title="Math Test",
         start_time=datetime.now(),
