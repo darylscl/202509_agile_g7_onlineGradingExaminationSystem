@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}My Results{% endblock %}
+{% block content %}
+<div class="container mt-5">
+    <h2 class="fw-bold mb-4">My Exam Results</h2>
+    {% if attempts %}
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Exam</th>
+                    <th>Score</th>
+                    <th>Submitted At</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for attempt in attempts %}
+                <tr>
+                    <td>{{ attempt.exam.title }}</td>
+                    <td>{{ attempt.score }}/{{ attempt.total_possible }} <span class="badge bg-info text-dark ms-2">{{ attempt.grade }}</span> <span class="badge ms-2 {% if attempt.status == 'Pass' %}bg-success{% else %}bg-danger{% endif %}">{{ attempt.status }}</span></td>
+                    <td>{{ attempt.submitted_at|date:"Y-m-d H:i:s" }}</td>
+                    <td>
+                        <a href="{% url 'student_exam_result' attempt.attempt_id %}" class="btn btn-sm btn-primary">View</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div class="alert alert-info">You have not completed any exams yet.</div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -6,6 +6,7 @@ from django.contrib.auth.models import User #default django admin user for now, 
 from django.contrib.auth import logout
 from .models import *
 
+
 #To see different page for different user roles
 # Login to django admin first
 # Instructor: Username: instructor Password: 1234
@@ -35,8 +36,56 @@ def custom_logout(request):
 
 
 # Exam Module Viewset
+@login_required
+def available_exams(request):
+    now = timezone.now()
+    exams = Exam.objects.filter(start_time__lte=now, end_time__gte=now)
+    from .models import ExamAttempt
+    attempts = ExamAttempt.objects.filter(student=request.user, submitted_at__isnull=False)
+    done_exam_ids = set(attempt.exam_id for attempt in attempts)
+    return render(request, "app/student/available_exams.html", {
+        "exams": exams,
+        "now": now,
+        "done_exam_ids": done_exam_ids,
+    })
 # User not yet implemented
 # the url need to change
+@login_required
+@user_passes_test(is_instructor)
+@login_required
+@user_passes_test(is_instructor)
+def exam_submissions(request, exam_id):
+    exam = get_object_or_404(Exam, exam_id=exam_id)
+    attempts = ExamAttempt.objects.filter(exam=exam, submitted_at__isnull=False).select_related('student').order_by('-submitted_at')
+    return render(request, "app/instructor/exam_submissions.html", {
+        "exam": exam,
+        "attempts": attempts,
+    })
+
+@login_required
+@user_passes_test(is_instructor)
+def view_submission(request, attempt_id):
+    attempt = get_object_or_404(ExamAttempt, attempt_id=attempt_id)
+    answers = attempt.answers.select_related("question", "selected_choice")
+    # Calculate totals for template
+    total_possible = sum([a.question.marks or 0 for a in answers])
+    total_awarded = sum([a.marks or 0 for a in answers])
+    if request.method == "POST":
+        # Example: update marks for each answer
+        for answer in answers:
+            mark = request.POST.get(f"mark_{answer.id}")
+            if mark is not None:
+                answer.marks = float(mark)
+                answer.save()
+        # Optionally, update total score
+        attempt.score = sum(a.marks or 0 for a in answers)
+        attempt.save()
+    return render(request, "app/instructor/view_submission.html", {
+        "attempt": attempt,
+        "answers": answers,
+        "total_possible": total_possible,
+        "total_awarded": total_awarded,
+    })
 
 @login_required
 @user_passes_test(is_instructor)
@@ -169,6 +218,12 @@ def question_update(request, question_id):
 
         question.question_text = request.POST.get("question_text")
         question.question_type = new_type
+        marks_value = request.POST.get("marks")
+        if marks_value is not None:
+            try:
+                question.marks = float(marks_value)
+            except ValueError:
+                question.marks = 1  # fallback/default
         question.save()
 
         if old_type == "TEXT" and new_type == "MCQ":
@@ -255,13 +310,6 @@ def choice_update(request, choice_id):
 
 
 @login_required
-def available_exams(request):
-    now = timezone.now()
-    exams = Exam.objects.filter(start_time__lte=now, end_time__gte=now)
-    return render(request, "app/student/available_exams.html", {"exams": exams})
-
-
-@login_required
 def take_exam(request, exam_id):
     exam = get_object_or_404(Exam, exam_id=exam_id)
     
@@ -336,13 +384,70 @@ def take_exam(request, exam_id):
         {"exam": exam, "questions": questions, "attempt": attempt},
     )
 
+@login_required
+def student_results(request):
+    """
+    Display a list of all completed exam attempts for the logged-in student.
+    """
+    attempts = ExamAttempt.objects.filter(student=request.user, submitted_at__isnull=False).select_related("exam").order_by("-submitted_at")
+    # Prepare extra info for each attempt: total_possible and grade
+    attempt_list = []
+    for attempt in attempts:
+        answers = attempt.answers.select_related("question", "selected_choice")
+        total_possible = sum([a.question.marks or 0 for a in answers])
+        total_awarded = sum([a.marks or 0 for a in answers])
+        if total_possible > 0:
+            percent = total_awarded / total_possible
+            if percent >= 0.9:
+                grade = "A"
+            elif percent >= 0.8:
+                grade = "B"
+            elif percent >= 0.7:
+                grade = "C"
+            elif percent >= 0.6:
+                grade = "D"
+            else:
+                grade = "F"
+            status = "Pass" if percent >= 0.5 else "Fail"
+        else:
+            grade = "N/A"
+            status = "N/A"
+        attempt_list.append({
+            "exam": attempt.exam,
+            "score": attempt.score,
+            "submitted_at": attempt.submitted_at,
+            "attempt_id": attempt.attempt_id,
+            "total_possible": total_possible,
+            "grade": grade,
+            "status": status,
+        })
+    return render(request, "app/student/results.html", {"attempts": attempt_list})
 
 @login_required
 def exam_result(request, attempt_id):
     attempt = get_object_or_404(ExamAttempt, attempt_id=attempt_id, student=request.user)
     answers = attempt.answers.select_related("question", "selected_choice")
+    # Calculate total possible marks
+    total_possible = sum([a.question.marks for a in answers])
+    # Calculate total awarded marks
+    total_awarded = sum([a.marks for a in answers if a.marks is not None])
+    # Grade calculation (example: A/B/C/D/F)
+    if total_possible > 0:
+        percent = total_awarded / total_possible
+        if percent >= 0.9:
+            grade = "A"
+        elif percent >= 0.8:
+            grade = "B"
+        elif percent >= 0.7:
+            grade = "C"
+        elif percent >= 0.6:
+            grade = "D"
+        else:
+            grade = "F"
+    else:
+        grade = "N/A"
     return render(
         request,
         "app/student/exam_result.html",
-        {"attempt": attempt, "answers": answers},
+        {"attempt": attempt, "answers": answers, "total_possible": total_possible, "total_awarded": total_awarded, "grade": grade},
     )
