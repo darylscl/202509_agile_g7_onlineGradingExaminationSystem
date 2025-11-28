@@ -9,7 +9,7 @@ from datetime import timedelta, datetime
 @given('an instructor exists with multiple exams')
 def step_impl(context):
     context.client = Client()
-    context.user = User.objects.create(username="teacher")
+    context.user = User.objects.create(username="teacher", is_staff=True)
     context.client.force_login(context.user)
     
     Exam.objects.create(
@@ -41,7 +41,7 @@ def step_impl(ctx):
 @given('an instructor exists with at least 1 created exam')
 def step_impl(ctx):
     ctx.client = Client()
-    ctx.user = User.objects.create(username="teacher")
+    ctx.user = User.objects.create(username="teacher", is_staff=True)
     ctx.client.force_login(ctx.user)
     
     ctx.exam = Exam.objects.create(
@@ -73,7 +73,7 @@ def step_impl(ctx):
 @given('an instructor exists with 1 exam to delete')
 def step_impl(ctx):
     ctx.client = Client()
-    ctx.user = User.objects.create(username="teacher")
+    ctx.user = User.objects.create(username="teacher", is_staff=True)
     ctx.client.force_login(ctx.user)
     
     ctx.exam = Exam.objects.create(
