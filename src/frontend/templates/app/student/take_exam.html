@@ -1,36 +1,102 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>{{ exam.title }}</title>
-</head>
-<body>
-    <h1>{{ exam.title }}</h1>
+{% extends "base.html" %}
 
-    <form method="post">
-        {% csrf_token %}
+{% block title %}Take Exam – {{ exam.title }}{% endblock %}
 
-        {% for question in questions %}
+{% block content %}
+
+<div class="container mt-5">
+
+    <!-- Header -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body d-flex justify-content-between align-items-start">
             <div>
-                <p>{{ question.question_text }}</p>
-
-                {% if question.question_type == "MCQ" %}
-                    {% for choice in question.choices.all %}
-                        <label>
-                            <input type="radio"
-                             
-                            name="q_{{ question.id }}"
-                                   value="{{ choice.id }}">
-                            {{ choice.choice_text }}
-                        </label><br>
-                    {% endfor %}
+                <h2 class="fw-bold mb-1">{{ exam.title }}</h2>
+                {% if exam.description %}
+                    <p class="text-muted mb-0">{{ exam.description }}</p>
                 {% else %}
-                    <textarea name="q_{{ question.id }}" rows="3" cols="40"></textarea>
+                    <p class="text-muted mb-0">
+                        Please answer all questions below before submitting the exam.
+                    </p>
                 {% endif %}
             </div>
-            <hr>
-        {% endfor %}
+            <div class="text-end">
+                <div class="small text-uppercase text-muted">Schedule</div>
+                <div class="fw-semibold">
+                    {{ exam.start_time }} – {{ exam.end_time }}
+                </div>
+                <span class="badge bg-success mt-2">Exam in Progress</span>
+            </div>
+        </div>
+    </div>
 
-        <button type="submit">Submit</button>
-    </form>
-</body>
-</html>
+    <!-- Instructions -->
+    <div class="alert alert-info shadow-sm mb-4">
+        <strong>Instructions:</strong><br>
+        • Multiple-choice (MCQ) questions – select one answer only.<br>
+        • Text questions – type your answer in the text box provided.<br>
+        • Do <strong>not</strong> refresh or close this page while answering.<br>
+        • Click <strong>Submit Exam</strong> when you have completed all questions.
+    </div>
+
+    <!-- Exam Form -->
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+
+                {% for question in questions %}
+                    <div class="mb-4 pb-3 border-bottom">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small">
+                                Question {{ forloop.counter }}
+                            </span>
+                            {% if question.question_type == "MCQ" %}
+                                <span class="badge bg-primary">MCQ</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Text Answer</span>
+                            {% endif %}
+                        </div>
+
+                        <!-- Question text (important for the test: e.g. "2 + 2 = ?") -->
+                        <p class="fw-semibold mb-2">
+                            {{ question.question_text }}
+                        </p>
+
+                        {% if question.question_type == "MCQ" %}
+                            <!-- MCQ options -->
+                            <div class="ms-2">
+                                {% for choice in question.choices.all %}
+                                    <div class="form-check mb-1">
+                                        <input class="form-check-input"
+                                               type="radio"
+                                               name="q_{{ question.id }}"
+                                               value="{{ choice.id }}"
+                                               id="q{{ question.id }}_choice{{ forloop.counter }}">
+                                        <label class="form-check-label" for="q{{ question.id }}_choice{{ forloop.counter }}">
+                                            {{ choice.choice_text }}
+                                        </label>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <!-- Text answer -->
+                            <textarea class="form-control"
+                                      name="q_{{ question.id }}"
+                                      rows="3"
+                                      placeholder="Type your answer here..."></textarea>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary">
+                        Submit Exam
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
