@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Available Exams{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4 mt-5">
+    <h2 class="fw-bold mb-0">Available Exams</h2>
+    <p class="text-muted small">
+</p>
+
+</div>
+
+
+<!-- Info banner -->
+<div class="alert alert-info shadow-sm" role="alert">
+    <strong>Note:</strong> Only exams that are currently within their scheduled start and end times
+    are listed here. Once you begin an exam, make sure you have enough time to finish.
+</div>
+
+<!-- Search Bar -->
+<div class="card shadow-sm mb-3">
+    <div class="card-body">
+        <input id="searchInput" type="text" class="form-control"
+               placeholder="Search exam by ID or title...">
+    </div>
+</div>
+
+<!-- Exams Table -->
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+
+        <table id="examTable" class="table table-hover table-borderless align-middle mb-0">
+            <t  style="background: #1b263b; color: #fff;">
+                <tr>
+                    <th>ID</th>
+                    <th>Title</th>
+                    <th>Questions</th>
+                    <th>Start</th>
+                    <th>End</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-center">Action</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for exam in exams %}
+                <tr data-id="{{ exam.exam_id|lower }}" data-title="{{ exam.title|lower }}">
+
+                    <!-- Exam ID -->
+                    <td class="fw-bold text-primary">
+                        {{ exam.exam_id }}
+                    </td>
+
+                    <!-- Title + optional description -->
+                    <td>
+                        <div class="fw-semibold">{{ exam.title }}</div>
+                        {% if exam.description %}
+                            <div class="text-muted small">{{ exam.description }}</div>
+                        {% endif %}
+                    </td>
+
+                    <!-- Question count -->
+                    <td>
+                        <span class="badge bg-secondary">
+                            {{ exam.questions.count }} Question{% if exam.questions.count != 1 %}s{% endif %}
+                        </span>
+                    </td>
+
+                    <!-- Schedule -->
+                    <td>{{ exam.start_time|date:"Y-m-d H:i" }}</td>
+                    <td>{{ exam.end_time|date:"Y-m-d H:i" }}</td>
+
+                    <!-- Status (these are all open because of your view filter) -->
+                    <td class="text-center">
+                        <span class="badge bg-success">Open Now</span>
+                    </td>
+
+                    <!-- Take exam -->
+                    <td class="text-center">
+                        <a href="{% url 'student_take_exam' exam.exam_id %}"
+                           class="btn btn-sm btn-primary">
+                            Take Exam
+                        </a>
+                    </td>
+
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center py-4 text-muted">
+                        No exams are currently available.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+    </div>
+</div>
+
+<!-- Simple search script (by ID or title) -->
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const searchInput = document.getElementById("searchInput");
+        const rows = document.querySelectorAll("#examTable tbody tr");
+
+        searchInput.addEventListener("input", function () {
+            const query = this.value.toLowerCase();
+
+            rows.forEach(row => {
+                const matches =
+                    row.dataset.id.includes(query) ||
+                    row.dataset.title.includes(query);
+
+                row.style.display = matches ? "" : "none";
+            });
+        });
+    });
+</script>
+
+{% endblock %}
