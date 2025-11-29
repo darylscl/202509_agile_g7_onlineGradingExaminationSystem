@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% load exam_extras %}
+{% block content %}
+<h2>Submission: {{ attempt.attempt_id }} ({{ attempt.student.username }})</h2>
+<form method="post">
+    {% csrf_token %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Question</th>
+                <th>Student Answer</th>
+                <th>Marks</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for answer in answers %}
+            <tr>
+                <td>{{ answer.question.question_text }}</td>
+            <td>
+                {% if answer.question.question_type == "MCQ" %}
+                    {% if answer.selected_choice %}
+                        {{ answer.selected_choice.choice_text }}
+                    {% else %}
+                        No answer
+                    {% endif %}
+                {% else %}
+                    {{ answer.text_answer|default:"No answer" }}
+                {% endif %}
+            </td>
+            <td>{{ answer.question.marks }}</td>
+            <td>
+                {% if answer.marks is not None %}
+                    {{ answer.marks }}
+                {% else %}
+                    <span class="text-muted">Pending</span>
+                {% endif %}
+            </td>
+            <td>
+                <input type="number" name="mark_{{ answer.id }}" value="{{ answer.marks|default:0 }}" step="0.01" min="0" class="form-control" />
+            </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div>
+        <strong>Total:</strong> {{ total_awarded|default:0 }} / {{ total_possible|default:0 }} marks
+        {% if total_possible %}
+        ({{ total_awarded|floatformat:2 }} / {{ total_possible|floatformat:2 }})
+        {% endif %}
+    </div>
+    <button type="submit" class="btn btn-success">Save Marks</button>
+</form>
+{% endblock %}

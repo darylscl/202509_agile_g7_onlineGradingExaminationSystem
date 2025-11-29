@@ -78,11 +78,15 @@
 
                     <!-- Take exam -->
                     <td class="text-center">
-                        <a href="{% url 'student_take_exam' exam.exam_id %}"
-                           class="btn btn-sm btn-primary">
+
+                    {% if exam.id in done_exam_ids %}
+                        <span class="badge bg-secondary">Done</span>
+                    {% else %}
+                        <a href="{% url 'student_take_exam' exam.exam_id %}" class="btn btn-primary btn-sm">
                             Take Exam
                         </a>
-                    </td>
+                    {% endif %}
+                </td>
 
                 </tr>
                 {% empty %}
