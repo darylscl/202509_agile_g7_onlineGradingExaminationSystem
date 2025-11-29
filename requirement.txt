@@ -3,3 +3,4 @@ pytest
 pytest-django
 behave
 behave-django
+pytest-rich

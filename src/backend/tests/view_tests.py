@@ -4,6 +4,8 @@ from django.utils import timezone
 from app.views import *
 from django.contrib.auth.models import User
 import pytest
+from app.models import Exam, ExamQuestion, Choice, ExamAttempt, Answer
+from django.urls import reverse
 
 # TDD test need to let user to know where is the failed test and what is the failed test. A summary like that
 
@@ -242,3 +244,220 @@ def test_exam_delete_view(client):
     response = client.post(f"/instructor/exams/{exam.exam_id}/delete/")
     assert response.status_code == 302
     assert Exam.objects.filter(exam_id=exam.exam_id).exists() is False
+
+
+@pytest.mark.django_db
+def test_student_takes_exam_during_valid_schedule(client):
+    teacher = User.objects.create(username="teacher")
+
+    student = User.objects.create_user(username="student", password="pass")
+
+    now = timezone.now()
+    exam = Exam.objects.create(
+        title="Sample Exam",
+        description="desc",
+        start_time=now - timedelta(minutes=10),
+        end_time=now + timedelta(minutes=50),
+        created_by=teacher,
+    )
+
+    q1 = ExamQuestion.objects.create(
+        exam=exam,
+        question_text="2 + 2 = ?",
+        question_type="MCQ",
+        order_no=1,
+    )
+    wrong = Choice.objects.create(choice_id=q1, choice_text="3", is_correct=False)
+    correct = Choice.objects.create(choice_id=q1, choice_text="4", is_correct=True)
+
+    q2 = ExamQuestion.objects.create(
+        exam=exam,
+        question_text="Explain your answer",
+        question_type="TEXT",
+        order_no=2,
+    )
+
+    client.force_login(student)
+
+    response = client.get(f"/student/exams/{exam.exam_id}/take/")
+    assert response.status_code == 200
+    assert b"2 + 2" in response.content  
+
+    post_data = {
+        f"q_{q1.id}": str(correct.id),                  
+        f"q_{q2.id}": "Because 2+2=4, obviously.",      
+    }
+    response = client.post(f"/student/exams/{exam.exam_id}/take/", data=post_data)
+
+    # redirect to exam result page
+    assert response.status_code == 302
+
+    # attempt created and marked as submitted
+    attempt = ExamAttempt.objects.get(exam=exam, student=student)
+    assert attempt.submitted is True
+    assert attempt.score == 1  #
+
+    # MCQ answer saved and marked
+    a1 = Answer.objects.get(attempt=attempt, question=q1)
+    assert a1.selected_choice == correct
+    assert a1.marks == 1
+
+    # TEXT answer saved
+    a2 = Answer.objects.get(attempt=attempt, question=q2)
+    assert a2.text_answer == "Because 2+2=4, obviously."
+
+@pytest.mark.django_db
+def test_student_sees_only_currently_available_exams(client):
+    student = User.objects.create_user(username="student", password="pass")
+    client.force_login(student)
+
+    teacher = User.objects.create(username="teacher")
+
+    now = timezone.now()
+
+    # exam that already ended
+    past_exam = Exam.objects.create(
+        title="Past Exam",
+        description="Already finished",
+        start_time=now - timedelta(days=2),
+        end_time=now - timedelta(days=1),
+        created_by=teacher,
+    )
+
+    # exam that hasn't started yet
+    future_exam = Exam.objects.create(
+        title="Future Exam",
+        description="Not started yet",
+        start_time=now + timedelta(days=1),
+        end_time=now + timedelta(days=2),
+        created_by=teacher,
+    )
+
+    # exam that is currently available 
+    current_exam = Exam.objects.create(
+        title="Current Exam",
+        description="Happening now",
+        start_time=now - timedelta(hours=1),
+        end_time=now + timedelta(hours=1),
+        created_by=teacher,
+    )
+
+    # call the view
+    response = client.get("/student/exams/available/")
+
+    assert response.status_code == 200
+
+    content = response.content
+
+    # current exam should be visible
+    assert b"Current Exam" in content
+
+    # past and future exams should NOT appear
+    assert b"Past Exam" not in content
+    assert b"Future Exam" not in content
+
+@pytest.mark.django_db
+def test_student_submit_exam_for_processing(client):
+    teacher = User.objects.create(username="teacher_oegs5")
+    student = User.objects.create_user(username="student_oegs5", password="pass")
+
+    now = timezone.now()
+
+    # exam that is currently open (start <= now <= end)
+    exam = Exam.objects.create(
+        title="Processing Test Exam",
+        description="For OEGS-5",
+        start_time=now - timedelta(minutes=10),
+        end_time=now + timedelta(minutes=50),
+        created_by=teacher,
+    )
+
+    # MCQ question
+    q1 = ExamQuestion.objects.create(
+        exam=exam,
+        question_text="2 + 3 = ?",
+        question_type="MCQ",
+        order_no=1,
+    )
+    wrong = Choice.objects.create(choice_id=q1, choice_text="4", is_correct=False)
+    correct = Choice.objects.create(choice_id=q1, choice_text="5", is_correct=True)
+
+    q2 = ExamQuestion.objects.create(
+        exam=exam,
+        question_text="Explain your calculation.",
+        question_type="TEXT",
+        order_no=2,
+    )
+
+    client.force_login(student)
+
+
+    post_data = {
+        f"q_{q1.id}": str(correct.id),
+        f"q_{q2.id}": "Because 2 + 3 = 5.",
+    }
+    response = client.post(f"/student/exams/{exam.exam_id}/take/", data=post_data)
+
+    # attempt should exist and be marked as submitted/processed
+    attempt = ExamAttempt.objects.get(exam=exam, student=student)
+
+    # redirect to exam result page
+    expected_url = reverse("student_exam_result", kwargs={"attempt_id": attempt.attempt_id})
+    assert response.status_code == 302
+    assert response["Location"] == expected_url
+
+    # MCQ answer saved and marked
+    a1 = Answer.objects.get(attempt=attempt, question=q1)
+    assert a1.selected_choice == correct
+    assert a1.marks == 1
+
+    # TEXT answer saved
+    a2 = Answer.objects.get(attempt=attempt, question=q2)
+    assert a2.text_answer == "Because 2 + 3 = 5."
+
+@pytest.mark.django_db
+def test_student_can_resume_ongoing_exam_attempt(client):
+    teacher = User.objects.create(username="teacher_resume")
+    student = User.objects.create_user(username="student_resume", password="pass")
+
+    now = timezone.now()
+
+    # exam currently open
+    exam = Exam.objects.create(
+        title="Resume Exam",
+        description="desc",
+        start_time=now - timedelta(minutes=10),
+        end_time=now + timedelta(minutes=50),
+        created_by=teacher,
+    )
+
+    # one question (so page isn't empty)
+    q1 = ExamQuestion.objects.create(
+        exam=exam,
+        question_text="2 + 2 = ?",
+        question_type="MCQ",
+        order_no=1,
+    )
+    Choice.objects.create(choice_id=q1, choice_text="3", is_correct=False)
+    Choice.objects.create(choice_id=q1, choice_text="4", is_correct=True)
+
+    # existing attempt for this student and exam (ongoing: submitted_at=None)
+    attempt = ExamAttempt.objects.create(exam=exam, student=student)
+    assert attempt.submitted_at is None
+
+    # there must be exactly one attempt before resuming
+    assert ExamAttempt.objects.filter(exam=exam, student=student).count() == 1
+
+    client.force_login(student)
+
+    # student "resumes" by visiting the same take-exam URL again
+    response = client.get(f"/student/exams/{exam.exam_id}/take/")
+
+    # still see the exam page (ongoing)
+    assert response.status_code == 200
+    assert b"2 + 2" in response.content  # question is visible
+
+    # and no new attempt is created; still only one attempt in DB
+    assert ExamAttempt.objects.filter(exam=exam, student=student).count() == 1
+
+

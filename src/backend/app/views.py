@@ -451,3 +451,4 @@ def exam_result(request, attempt_id):
         "app/student/exam_result.html",
         {"attempt": attempt, "answers": answers, "total_possible": total_possible, "total_awarded": total_awarded, "grade": grade},
     )
+
