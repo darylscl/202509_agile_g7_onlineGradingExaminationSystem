@@ -258,7 +258,7 @@ def choice_update(request, choice_id):
 def available_exams(request):
     now = timezone.now()
     exams = Exam.objects.filter(start_time__lte=now, end_time__gte=now)
-    return render(request, "app/student/available_exams.html", {"exams": exams})
+    return render(request, "app/student/available_exams.html", {"exams": exams, "now": now})
 
 
 @login_required
@@ -346,3 +346,4 @@ def exam_result(request, attempt_id):
         "app/student/exam_result.html",
         {"attempt": attempt, "answers": answers},
     )
+
