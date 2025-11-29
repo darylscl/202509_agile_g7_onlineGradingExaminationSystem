@@ -1,53 +1,4 @@
-{% extends "base.html" %} 
-
-{% block title %}Available Exams{% endblock %} 
-
-{% block content %} 
-<div class="container mt-5"> 
-    <h2 class="fw-bold mb-4">Available Exams</h2> 
-    <div class="alert alert-info"> 
-        <strong>Note:</strong> Only exams that are currently within their scheduled start and end times are listed here. 
-    </div> 
-    {% if exams %} 
-        <table class="table table-bordered table-hover"> 
-            <thead class="table-dark"> 
-                <tr> 
-                    <th>ID</th> 
-                    <th>Title</th> 
-                    <th>Description</th> 
-                    <th>Start Time</th> 
-                    <th>End Time</th> 
-                    <th>Action</th> 
-                </tr> 
-            </thead> 
-            <tbody> 
-                {% for exam in exams %} 
-                <tr> 
-                    <td>{{ exam.exam_id }}</td> 
-                    <td>{{ exam.title }}</td> 
-                    <td>{{ exam.description }}</td> 
-                    <td>{{ exam.start_time|date:"Y-m-d H:i" }}</td> 
-                    <td>{{ exam.end_time|date:"Y-m-d H:i" }}</td> 
-<td class="text-center">
-    {% if exam.id in done_exam_ids %}
-        <span class="badge bg-secondary">Done</span>
-    {% else %}
-        <a href="{% url 'student_take_exam' exam.exam_id %}" class="btn btn-primary btn-sm">
-            Take Exam
-        </a>
-    {% endif %}
-</td>
-                </tr> 
-                {% endfor %} 
-            </tbody> 
-        </table> 
-    {% else %} 
-        <div class="alert alert-warning"> 
-            No exams are currently available. 
-        </div> 
-    {% endif %} 
-</div> 
-{% endblock %}{% extends "base.html" %}
+{% extends "base.html" %}
 
 {% block title %}Available Exams{% endblock %}
 
@@ -127,11 +78,15 @@
 
                     <!-- Take exam -->
                     <td class="text-center">
-                        <a href="{% url 'student_take_exam' exam.exam_id %}"
-                           class="btn btn-sm btn-primary">
+
+                    {% if exam.id in done_exam_ids %}
+                        <span class="badge bg-secondary">Done</span>
+                    {% else %}
+                        <a href="{% url 'student_take_exam' exam.exam_id %}" class="btn btn-primary btn-sm">
                             Take Exam
                         </a>
-                    </td>
+                    {% endif %}
+                </td>
 
                 </tr>
                 {% empty %}

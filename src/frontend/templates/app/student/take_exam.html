@@ -1,41 +1,4 @@
 {% extends "base.html" %}
-{% load exam_extras %}
-
-{% block title %}Take Exam - {{ exam.title }}{% endblock %}
-
-{% block content %}
-<div class="container mt-5">
-    <h2 class="fw-bold mb-4">{{ exam.title }}</h2>
-    <p class="mb-3">{{ exam.description }}</p>
-    <form method="post">
-        {% csrf_token %}
-        {% for question in questions %}
-            <div class="mb-4">
-                <div class="fw-semibold mb-2">
-                    Q{{ forloop.counter }}. {{ question.question_text }}
-                </div>
-                {% if question.question_type == "MCQ" %}
-                    {% for choice in question.choices.all %}
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio"
-                                   name="q_{{ question.id }}" id="q_{{ question.id }}_{{ forloop.counter }}"
-                                   value="{{ choice.id }}"
-                                   {% if attempt.answers|get_answer_selected:question|add:choice %}checked{% endif %}>
-                            <label class="form-check-label" for="q_{{ question.id }}_{{ forloop.counter }}">
-                                {{ choice.choice_text }}
-                            </label>
-                        </div>
-                    {% endfor %}
-                {% else %}
-                    <textarea class="form-control" name="q_{{ question.id }}" rows="2"
-                              placeholder="Your answer here...">{% if attempt.answers|get_answer_text:question %}{{ attempt.answers|get_answer_text:question }}{% endif %}</textarea>
-                {% endif %}
-            </div>
-        {% endfor %}
-        <button type="submit" class="btn btn-success">Submit Exam</button>
-    </form>
-</div>
-{% endblock %}{% extends "base.html" %}
 
 {% block title %}Take Exam – {{ exam.title }}{% endblock %}
 
