@@ -46,9 +46,9 @@ class ExamQuestion(models.Model):
         ("MCQ", "Multiple Choice"),
         ("TEXT", "Short Answer"),
     ])
-    
     order_no = models.PositiveIntegerField(default=1)
-    
+    marks = models.FloatField(default=1)  # <-- Add this line
+
     def __str__(self):
         return f"Q{self.order_no}: {self.question_text[:30]}"
     

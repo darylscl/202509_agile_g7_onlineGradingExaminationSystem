@@ -9,8 +9,7 @@
     <div class="card shadow-sm border-0 rounded-4 p-4 mx-auto" style="max-width: 800px;">
 
         <form method="POST">
-            {% csrf_token %}
-
+            {% csrf_token %} 
             <!-- Question Text -->
             <div class="mb-4">
                 <label class="form-label fw-semibold">Question Text</label>
@@ -36,7 +35,8 @@
                     <div class="input-group mb-3">
                         <input type="text" class="form-control"
                                name="choice_text_{{ forloop.counter0 }}"
-                               value="{{ choice.choice_text }}" required>
+                               value="{{ choice.choice_text }}"
+                               {% if question.question_type == "MCQ" %}required{% endif %}>
 
                         <div class="input-group-text">
                             <input type="radio" name="correct_choice"
@@ -51,7 +51,8 @@
                     <div class="input-group mb-3">
                         <input type="text" class="form-control"
                                name="choice_text_{{ forloop.counter0 }}"
-                               placeholder="Choice {{ forloop.counter }}" required>
+                               placeholder="Choice {{ forloop.counter }}"
+                               {% if question.question_type == "MCQ" %}required{% endif %}>
 
                         <div class="input-group-text">
                             <input type="radio" name="correct_choice" value="{{ forloop.counter0 }}">
@@ -60,7 +61,7 @@
                     {% endfor %}
                 {% endfor %}
             </div>
-
+            <input type="number" name="marks" value="{{ question.marks|default:1 }}" min="0" step="1" class="form-control" placeholder="Marks">
             <!-- Buttons -->
             <div class="d-flex justify-content-between pt-2">
                 <button type="submit" class="btn btn-success btn-lg px-5">
