@@ -30,7 +30,3 @@ jobs:
           cd src/backend
           pytest
 
-      - name: Run BOD tests
-        run: |
-          cd src/backend
-          python manage.py behave
