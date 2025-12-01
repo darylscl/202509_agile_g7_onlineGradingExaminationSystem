@@ -22,7 +22,7 @@ def test_student_register_success(client):
     response = client.post(reverse("student_register"), data)
 
     assert response.status_code == 302
-    assert response.url == reverse("homepage")   
+    assert response.url == reverse("universal_login")   
 
     student = Student.objects.first()
     assert student is not None
@@ -139,7 +139,7 @@ def test_instructor_register_success(client):
     response = client.post(reverse("instructor_register"), data)
 
     assert response.status_code == 302
-    assert response.url == reverse("homepage")
+    assert response.url == reverse("universal_login")
 
     instructor = Instructor.objects.first()
     assert instructor is not None
