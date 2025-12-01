@@ -2,22 +2,152 @@
 {% block title %}Login{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center mt-5">
-    <div class="col-md-5">
-        <div class="card shadow-sm p-4">
 
-            <h3 class="fw-bold mb-3">Login</h3>
+<div class="container">
+    <div class="row justify-content-center align-items-center min-vh-100 py-5">
+        <div class="col-12 col-sm-10 col-md-8 col-lg-5 col-xl-4">
 
-            <form method="POST">
-                {% csrf_token %}
-                {{ form.as_p }}
+            <div class="card border-0 shadow-lg">
+                <div class="card-body p-4 p-sm-5">
 
-                <button type="submit" class="btn btn-primary w-100 mt-2">
-                    Login
-                </button>
-            </form>
+                    <!-- Header -->
+                    <div class="text-center mb-4">
+                        <h2 class="fw-bold mb-2">Welcome Back</h2>
+                        <p class="text-muted">Sign in to continue to your account</p>
+                    </div>
+
+                    <!-- Messages -->
+                    {% if messages %}
+                    <div class="mb-3 text-center">
+                        {% for message in messages %}
+                        <div class="alert-message {{ message.tags }}">
+                            {{ message }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+
+
+                    <!-- Form -->
+                    <form method="POST">
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label for="email" class="form-label fw-semibold">Email Address</label>
+                            <input type="email" name="email" id="email" class="form-control form-control-lg"
+                                placeholder="Enter your email" value="{{ request.POST.email }}" required>
+
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="password" class="form-label fw-semibold">Password</label>
+                            <input type="password" name="password" id="password" class="form-control form-control-lg"
+                                placeholder="Enter your password" required>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="remember">
+                                <label class="form-check-label text-muted small" for="remember">
+                                    Remember me
+                                </label>
+                            </div>
+                            <a href="/forgot-password/" class="text-decoration-none small">Forgot password?</a>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg w-100 mb-3">
+                            Sign In
+                        </button>
+
+                    </form>
+
+                    <!-- Divider -->
+                    <div class="position-relative my-4">
+                        <hr class="text-muted">
+                        <span class="position-absolute top-50 start-50 translate-middle bg-white px-3 text-muted small">
+                            OR
+                        </span>
+                    </div>
+
+                    <!-- Sign Up Link -->
+                    <div class="text-center">
+                        <p class="mb-0 text-muted">
+                            Don't have an account?
+                            <a href="/signup/" class="fw-semibold text-decoration-none">Sign Up</a>
+                        </p>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Footer Text -->
+            <div class="text-center mt-4">
+                <small class="text-muted">
+                    Protected by reCAPTCHA and subject to our
+                    <a href="/privacy/" class="text-muted">Privacy Policy</a>
+                </small>
+            </div>
 
         </div>
     </div>
 </div>
+
+<style>
+    .alert-message {
+        padding: 10px 15px;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        display: inline-block;
+        max-width: 100%;
+        text-align: center;
+        margin-bottom: 10px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+        animation: fadeSlide 0.4s ease-out;
+        font-weight: 500;
+    }
+
+    /* Error (red) */
+    .alert-message.error {
+        background: #ffebee;
+        color: #c62828;
+        border: 1px solid #e57373;
+    }
+
+    /* Success (green) */
+    .alert-message.success {
+        background: #e8f5e9;
+        color: #2e7d32;
+        border: 1px solid #81c784;
+    }
+
+    /* Warning (yellow) */
+    .alert-message.warning {
+        background: #fff8e1;
+        color: #f9a825;
+        border: 1px solid #ffe082;
+    }
+
+    /* Info (blue) */
+    .alert-message.info {
+        background: #e3f2fd;
+        color: #1565c0;
+        border: 1px solid #64b5f6;
+    }
+
+    @keyframes fadeSlide {
+        from {
+            opacity: 0;
+            transform: translateY(-6px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+
+
+
 {% endblock %}

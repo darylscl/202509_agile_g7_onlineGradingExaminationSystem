@@ -1,10 +1,84 @@
 from django.shortcuts import render, get_list_or_404, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required, user_passes_test
+from django.http import HttpResponse
+from django.contrib import messages
 from django.utils import timezone
 from django.urls import reverse
-from django.contrib.auth.models import User #default django admin user for now, waiting for user
-from django.contrib.auth import logout
+from django.contrib.auth.hashers import make_password
 from .models import *
+
+
+#Session login
+def student_login(request):
+    if request.method == "POST":
+        email = request.POST.get("email")
+        password = request.POST.get("password")
+        
+        try:
+            student = Student.objects.get(student_email=email)
+        except Student.DoesNotExist:
+            messages.error(request, "No user found with this email")
+            return render(request, "login.html", {})
+        
+        if not check_password(password, student.password):
+            messages.error(request, "Invalid password")
+            return render(request, "login.html", {})
+        
+        request.session["user_type"] = "student"
+        request.session["user_id"] = student.student_ID
+        return redirect("homepage")
+    
+    return render(request, "app/login.html", {"user_type": "student"})
+
+def instructor_login(request):
+    if request.method == "POST":
+        email = request.POST.get("email")
+        password = request.POST.get("password")
+
+        try:
+            instructor = Instructor.objects.get(instructor_email=email)
+        except Instructor.DoesNotExist:
+            messages.error(request, "No user found with this email")
+            return render(request, "login.html", {})
+
+        if not check_password(password, instructor.password):
+            messages.error(request, "Invalid password.")
+            return render(request, "login.html", {})
+
+        request.session["user_type"] = "instructor"
+        request.session["user_id"] = instructor.instructor_ID 
+        return redirect("homepage")
+
+    return render(request, "app/login.html", {"user_type": "instructor"})
+
+def universal_login(request):
+    if request.method == "POST":
+        email = request.POST.get("email")
+
+        if Student.objects.filter(student_email=email).exists():
+            return student_login(request)
+
+        if Instructor.objects.filter(instructor_email=email).exists():
+            return instructor_login(request)
+
+        messages.error(request, "No account found with this email.")
+        return redirect("universal_login")
+
+    return render(request, "login.html")
+
+
+def student_required(view_func):
+    def wrapper(request, *args, **kwargs):
+        if request.session.get("user_type") != "student":
+            return redirect("student_login")
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+def instructor_required(view_func):
+    def wrapper(request, *args, **kwargs):
+        if request.session.get("user_type") != "instructor":
+            return redirect("instructor_login")
+        return view_func(request, *args, **kwargs)
+    return wrapper
 
 
 #To see different page for different user roles
@@ -13,47 +87,133 @@ from .models import *
 
 # Helper function
 def homepage(request):
-    user = request.user
-
-    if not user.is_authenticated:
+    user_type = request.session.get("user_type")
+    
+    if not user_type:
         return render(request, "home_public.html")
 
-    if user.is_staff:
+    if user_type == "instructor":
         return render(request, "app/instructor/dashboard.html")
 
     return render(request, "app/student/dashboard.html")
 
 
 def is_instructor(user):
-    return user.is_staff  # treat staff as instructor currently
+    return   # treat staff as instructor currently
 
 
 def custom_logout(request):
-    logout(request)
-    return redirect("/")
+    request.session.flush()
+    return redirect("homepage")
+
+def signup_role_select(request):
+    return render(request, "signup.html")
+
+
 
 # User viewset
+def student_register(request):
+    if request.method == "POST":
+        full_name = request.POST.get("full_name")
+        email = request.POST.get("email")
+        matric = request.POST.get("matric_number")
+        contact = request.POST.get("contact_number")
+        password = request.POST.get("password")
+        confirm = request.POST.get("confirm_password")
+        
+        #validation
+        if not full_name or not email or not matric or not password:
+            messages.error(request, "All required fields must be filled.")
+            return redirect("student_register")
+        
+        try:
+            validate_email(email)
+        except ValidationError:
+            messages.error(request, "Invalid email format.")
+            return redirect("student_register")
+        
+        if password != confirm:
+            messages.error(request, "Passwords do not match.")
+            return redirect("student_register")
+        
+        if Student.objects.filter(student_email=email).exists():
+            messages.error(request, "Email is already registered.")
+            return redirect("student_register")
+        
+        if Student.objects.filter(matric_number=matric).exists():
+            messages.error(request, "Matric number already existed.")
+            return redirect("student_register")
+        
+        Student.objects.create(
+            full_name=full_name,
+            student_email=email,
+            matric_number=matric,
+            contact_number=contact,
+            password=make_password(password),  
+        )
+        
+        messages.success(request, "Registration successful. Please log in.")
+        return redirect("universal_login")
+    
+    return render(request, "app/student/register.html")
 
+def instructor_register(request):
+    if request.method == "POST":
+        full_name = request.POST.get("full_name")
+        email = request.POST.get("email")
+        contact = request.POST.get("contact_number")
+        department = request.POST.get("department")
+        password = request.POST.get("password")
+        confirm = request.POST.get("confirm_password")
+        
+        #validation
+        if not full_name or not email or not password:
+            messages.error(request, "All required fields must be filled.")
+            return redirect("instructor_register")
+        
+        try:
+            validate_email(email)
+        except ValidationError:
+            messages.error(request, "Invalid email format.")
+            return redirect("instructor_register")
+        
+        if password != confirm:
+            messages.error(request, "Passwords do not match.")
+            return redirect("instructor_register")
+        
+        if Instructor.objects.filter(instructor_email=email).exists():
+            messages.error(request, "Email already registered.")
+            return redirect("instructor_register")
+        
+        Instructor.objects.create(
+            full_name=full_name,
+            instructor_email=email,
+            contact_number=contact,
+            department=department,
+            password=make_password(password),  
+        )
+        
+        messages.success(request, "Instructor account created. Please log in.")
+        return redirect("universal_login")
+    
+    return render(request, "app/instructor/register.html")
 
 # Exam Module Viewset
-@login_required
 def available_exams(request):
     now = timezone.now()
     exams = Exam.objects.filter(start_time__lte=now, end_time__gte=now)
     from .models import ExamAttempt
-    attempts = ExamAttempt.objects.filter(student=request.user, submitted_at__isnull=False)
+    student_id = request.session.get("user_id")
+    student = Student.objects.get(student_ID=student_id)
+    attempts = ExamAttempt.objects.filter(student=student, submitted_at__isnull=False)
     done_exam_ids = set(attempt.exam_id for attempt in attempts)
     return render(request, "app/student/available_exams.html", {
         "exams": exams,
         "now": now,
         "done_exam_ids": done_exam_ids,
     })
-# User not yet implemented
-# the url need to change
-@login_required
-@user_passes_test(is_instructor)
-@login_required
-@user_passes_test(is_instructor)
+
+
 def exam_submissions(request, exam_id):
     exam = get_object_or_404(Exam, exam_id=exam_id)
     attempts = ExamAttempt.objects.filter(exam=exam, submitted_at__isnull=False).select_related('student').order_by('-submitted_at')
@@ -62,8 +222,6 @@ def exam_submissions(request, exam_id):
         "attempts": attempts,
     })
 
-@login_required
-@user_passes_test(is_instructor)
 def view_submission(request, attempt_id):
     attempt = get_object_or_404(ExamAttempt, attempt_id=attempt_id)
     answers = attempt.answers.select_related("question", "selected_choice")
@@ -87,24 +245,22 @@ def view_submission(request, attempt_id):
         "total_awarded": total_awarded,
     })
 
-@login_required
-@user_passes_test(is_instructor)
 def exam_list(request):
-    user = request.user
-    exams = Exam.objects.filter(created_by=user).order_by("-created_at")
+    instructor_id = request.session.get("user_id")
+    instructor = Instructor.objects.get(instructor_ID=instructor_id)
+    exams = Exam.objects.filter(created_by=instructor).order_by("-created_at")
     return render(request, "app/instructor/exam_list.html", {"exams": exams})
  # url need to change later when frontend comes in
 
 
-@login_required
-@user_passes_test(is_instructor)
 def exam_create(request):
-    user = request.user
+    instructor_id = request.session.get("user_id")
+    instructor = Instructor.objects.get(instructor_ID=instructor_id)
     exam = None
     exam_id = request.GET.get("exam_id")
 
     if exam_id:
-        exam = Exam.objects.filter(exam_id=exam_id, created_by=user).first()
+        exam = Exam.objects.filter(exam_id=exam_id, created_by=instructor).first()
 
     # CREATE EXAM
     if request.method == "POST" and "create_exam" in request.POST:
@@ -113,13 +269,13 @@ def exam_create(request):
             description=request.POST.get("description"),
             start_time=request.POST.get("start_time"),
             end_time=request.POST.get("end_time"),
-            created_by=user,
+            created_by=instructor,
         )
         return redirect(f"/instructor/exams/create/?exam_id={exam.exam_id}")
 
     # ADD QUESTION
     if request.method == "POST" and "add_question" in request.POST:
-        exam = Exam.objects.get(exam_id=exam_id, created_by=user)
+        exam = Exam.objects.get(exam_id=exam_id, created_by=instructor)
 
         question = ExamQuestion.objects.create(
             exam=exam,
@@ -146,10 +302,10 @@ def exam_create(request):
 
 
 
-@login_required
-@user_passes_test(is_instructor)
 def exam_detail(request, exam_id):
-    user = request.user
+    instructor_id = request.session.get("user_id")
+    instructor = Instructor.objects.get(instructor_ID=instructor_id)
+    user = instructor
     exam = get_object_or_404(Exam, exam_id=exam_id, created_by=user)
     questions = exam.questions.prefetch_related("choices").order_by("order_no")
 
@@ -158,10 +314,10 @@ def exam_detail(request, exam_id):
     })
 
 
-@login_required
-@user_passes_test(is_instructor)
 def exam_update(request, exam_id):
-    user = request.user
+    instructor_id = request.session.get("user_id")
+    instructor = Instructor.objects.get(instructor_ID=instructor_id)
+    user = instructor
     exam = get_object_or_404(Exam, exam_id=exam_id, created_by=user)
 
     if request.method == "POST":
@@ -177,10 +333,10 @@ def exam_update(request, exam_id):
 
 
 
-@login_required
-@user_passes_test(is_instructor)
 def exam_delete(request, exam_id):
-    user = request.user
+    instructor_id = request.session.get("user_id")
+    instructor = Instructor.objects.get(instructor_ID=instructor_id)
+    user = instructor
     exam = get_object_or_404(Exam, exam_id=exam_id, created_by=user)
     exam.delete()
     return redirect("instructor_exam_list")
@@ -188,10 +344,10 @@ def exam_delete(request, exam_id):
 
 
 
-@login_required
-@user_passes_test(is_instructor)
 def question_create(request, exam_id):
-    user = request.user
+    instructor_id = request.session.get("user_id")
+    instructor = Instructor.objects.get(instructor_ID=instructor_id)
+    user = instructor
     exam = get_object_or_404(Exam, exam_id=exam_id, created_by=user)
 
     if request.method == "POST":
@@ -206,8 +362,6 @@ def question_create(request, exam_id):
     return render(request, "app/instructor/question_form.html", {"exam": exam})
 
 
-@login_required
-@user_passes_test(is_instructor)
 def question_update(request, question_id):
     question = get_object_or_404(ExamQuestion, id=question_id)
     exam = question.exam
@@ -266,10 +420,10 @@ def question_update(request, question_id):
 
 
 
-@login_required
-@user_passes_test(is_instructor)
 def question_delete(request, exam_id, question_id):
-    user = request.user
+    instructor_id = request.session.get("user_id")
+    instructor = Instructor.objects.get(instructor_ID=instructor_id)
+    user = instructor
     exam = get_object_or_404(Exam, exam_id=exam_id, created_by=user)
     question = get_object_or_404(ExamQuestion, id=question_id, exam=exam)
 
@@ -278,8 +432,6 @@ def question_delete(request, exam_id, question_id):
 
 
 
-@login_required
-@user_passes_test(is_instructor)
 def choice_add(request, question_id):
     question = get_object_or_404(ExamQuestion, id=question_id)
 
@@ -294,8 +446,6 @@ def choice_add(request, question_id):
     return render(request, "app/instructor/choice_form.html", {"question": question})
 
 
-@login_required
-@user_passes_test(is_instructor)
 def choice_update(request, choice_id):
     choice = get_object_or_404(Choice, id=choice_id)
 
@@ -309,18 +459,15 @@ def choice_update(request, choice_id):
     return render(request, "app/instructor/choice_form.html", {"choice": choice})
 
 
-@login_required
 def take_exam(request, exam_id):
     exam = get_object_or_404(Exam, exam_id=exam_id)
     
     if not exam.is_open:
         return render(request, "app/student/exam_closed.html", {"exam": exam})
     
-    attempt, created = ExamAttempt.objects.get_or_create(
-        exam=exam,
-        student=request.user,
-        defaults={},
-    )
+    student_id = request.session.get("user_id")
+    student = Student.objects.get(student_ID=student_id)
+    attempt, created = ExamAttempt.objects.get_or_create(exam=exam,student=student)
     
     if attempt.submitted:
         return render(request, "app/student/exam_done.html", {
@@ -384,12 +531,13 @@ def take_exam(request, exam_id):
         {"exam": exam, "questions": questions, "attempt": attempt},
     )
 
-@login_required
 def student_results(request):
     """
     Display a list of all completed exam attempts for the logged-in student.
     """
-    attempts = ExamAttempt.objects.filter(student=request.user, submitted_at__isnull=False).select_related("exam").order_by("-submitted_at")
+    student_id = request.session.get("user_id")
+    student = Student.objects.get(student_ID=student_id)
+    attempts = ExamAttempt.objects.filter(student=student, submitted_at__isnull=False).select_related("exam").order_by("-submitted_at")
     # Prepare extra info for each attempt: total_possible and grade
     attempt_list = []
     for attempt in attempts:
@@ -423,9 +571,10 @@ def student_results(request):
         })
     return render(request, "app/student/results.html", {"attempts": attempt_list})
 
-@login_required
 def exam_result(request, attempt_id):
-    attempt = get_object_or_404(ExamAttempt, attempt_id=attempt_id, student=request.user)
+    student_id = request.session.get("user_id")
+    student = Student.objects.get(student_ID=student_id)
+    attempt = get_object_or_404(ExamAttempt, attempt_id=attempt_id, student=student)
     answers = attempt.answers.select_related("question", "selected_choice")
     # Calculate total possible marks
     total_possible = sum([a.question.marks for a in answers])

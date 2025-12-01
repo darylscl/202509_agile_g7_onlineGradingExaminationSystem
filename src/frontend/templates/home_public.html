@@ -1,8 +1,145 @@
 {% extends "base.html" %}
-{% block title %}Welcome{% endblock %}
+{% load static %}
+
+{% block title %}Welcome | Online Exam System{% endblock %}
+
 {% block content %}
-<div class="py-5 text-center">
-    <h2 class="fw-bold">Welcome to the Online Exam System</h2>
-    <p class="text-muted">Please log in or sign up to continue.</p>
-</div>
+
+<section class="py-5 text-center text-white hero-section">
+    <div class="container">
+
+        <h1 class="fw-bold display-5 hero-title">
+            Welcome to the Online Examination & Grading System
+        </h1>
+
+        <p class="lead mt-3 hero-subtitle">
+            A secure and user-friendly platform for digital assessments, automated evaluation,
+            and real-time academic insights.
+        </p>
+
+        {% if not request.session.user_id %}
+        <a href="/login/" class="btn btn-primary btn-lg mt-3 px-4">
+            <i class="bi bi-box-arrow-in-right me-1"></i> Login
+        </a>
+        <a href="/signup/" class="btn btn-outline-light btn-lg mt-3 ms-2 px-4">
+            <i class="bi bi-person-plus-fill me-1"></i> Signup
+        </a>
+        {% else %}
+        {% if request.session.user_type == "instructor" %}
+        <a href="/instructor/exams/create/" class="btn btn-primary btn-lg mt-4 px-4">
+            <i class="bi bi-plus-circle me-1"></i> Create New Exam
+        </a>
+        {% else %}
+        <a href="/student/exams/available/" class="btn btn-primary btn-lg mt-4 px-4">
+            <i class="bi bi-pencil-square me-1"></i> View Available Exams
+        </a>
+        {% endif %}
+        {% endif %}
+
+    </div>
+</section>
+
+
+<section class="py-5 bg-white">
+    <div class="container">
+        <h2 class="fw-bold text-center mb-4" style="color:#1b263b;">System Features</h2>
+
+        <div class="row g-4">
+
+            <div class="col-md-4">
+                <div class="card border-0 shadow h-100 text-center p-4">
+                    <i class="bi bi-journal-text mb-3 fs-1 text-primary"></i>
+                    <h5 class="fw-semibold">Exam Creation</h5>
+                    <p class="text-secondary">
+                        Instructors can create MCQ or text-based questions, schedule exam times, and manage students’
+                        access.
+                    </p>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card border-0 shadow h-100 text-center p-4">
+                    <i class="bi bi-pencil-square mb-3 fs-1 text-success"></i>
+                    <h5 class="fw-semibold">Secure Online Taking</h5>
+                    <p class="text-secondary">
+                        Students can attempt exams within scheduled times with auto-saved progress and timer
+                        enforcement.
+                    </p>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card border-0 shadow h-100 text-center p-4">
+                    <i class="bi bi-bar-chart-line mb-3 fs-1 text-warning"></i>
+                    <h5 class="fw-semibold">Grading & Results</h5>
+                    <p class="text-secondary">
+                        Automated scoring for MCQs, instructor manual grading for text answers, and summary result
+                        reports.
+                    </p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+<section class="py-5">
+    <div class="container">
+        <h2 class="fw-bold text-center text-white mb-4" style="color:#1b263b;">How It Works</h2>
+
+        <div class="row text-center g-4">
+
+            <div class="col-md-4">
+                <i class="bi bi-clipboard-plus fs-1 text-primary"></i>
+                <h5 class="fw-semibold mt-2 text-white">1. Create Exam</h5>
+                <p class="text-secondary text-white">Instructor prepares exam, sets schedule and question types.</p>
+            </div>
+
+            <div class="col-md-4">
+                <i class="bi bi-laptop fs-1 text-success"></i>
+                <h5 class="fw-semibold mt-2 text-white">2. Students Take Exam</h5>
+                <p class="text-secondary text-white">Students answer questions within the exam period.</p>
+            </div>
+
+            <div class="col-md-4">
+                <i class="bi bi-award fs-1 text-warning"></i>
+                <h5 class="fw-semibold mt-2 text-white">3. Grade & Publish Results</h5>
+                <p class="text-secondary text-white">System auto-grades MCQ and instructors grade text answers.</p>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+
+<footer class="py-3 mt-4 text-center text-secondary">
+    <small>© {{ year|default:"2025" }} Online Exam System. All rights reserved.</small>
+</footer>
+<style>
+    .hero-section {
+        padding-top: 100px;
+        padding-bottom: 120px;
+        background: transparent;
+        /* uses base gradient */
+    }
+
+    .hero-title,
+    .hero-subtitle {
+        color: #f8f9fa !important;
+        /* Force white text */
+        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+    }
+
+    .btn-outline-light {
+        border-color: #ffffff;
+        color: #ffffff;
+    }
+
+    .btn-outline-light:hover {
+        background-color: #ffffff;
+        color: #1b263b;
+    }
+</style>
+
+
 {% endblock %}
