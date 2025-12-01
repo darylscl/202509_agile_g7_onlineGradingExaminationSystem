@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Student Signup{% endblock %}
+
+{% block content %}
+
+<div class="signup-wrapper py-5">
+    <div class="row justify-content-center mt-3">
+        <div class="col-md-6">
+
+            <!-- Page Title -->
+            <div class="text-center mb-4">
+                <h2 class="fw-bold text-white">Student Registration</h2>
+                <p class="text-light opacity-75">Create a student account to access online exams</p>
+            </div>
+
+            <!-- Registration Card -->
+            <div class="card shadow-lg rounded-4">
+                <div class="card-body p-4">
+
+                    {% if messages %}
+                    {% for message in messages %}
+                    <div class="alert 
+            {% if message.tags == 'success' %}alert-success
+            {% elif message.tags == 'error' %}alert-danger
+            {% elif message.tags == 'warning' %}alert-warning
+            {% else %}alert-info{% endif %}
+            text-center">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+
+
+
+                    <form method="POST">
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label class="form-label">Full Name</label>
+                            <input type="text" class="form-control" name="full_name" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" name="email" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Matric Number</label>
+                            <input type="text" class="form-control" name="matric_number" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Contact Number (Optional)</label>
+                            <input type="text" class="form-control" name="contact_number">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Password</label>
+                            <input type="password" class="form-control" name="password" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Confirm Password</label>
+                            <input type="password" class="form-control" name="confirm_password" required>
+                        </div>
+
+                        <button class="btn btn-primary w-100 py-2 fw-semibold">Create Account</button>
+                    </form>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<style>
+    .signup-wrapper {
+        background: transparent;
+        /* uses the dark gradient from base */
+        min-height: calc(100vh - 70px);
+    }
+</style>
+
+{% endblock %}
