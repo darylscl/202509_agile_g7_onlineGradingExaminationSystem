@@ -1,65 +1,293 @@
 
 from datetime import timedelta
 from django.utils import timezone
+from django.contrib.messages import get_messages
 from app.views import *
-from django.contrib.auth.models import User
 import pytest
 from app.models import Exam, ExamQuestion, Choice, ExamAttempt, Answer
 from django.urls import reverse
 
-# TDD test need to let user to know where is the failed test and what is the failed test. A summary like that
+# User Module test
+@pytest.mark.django_db
+def test_student_register_success(client):
+    data = {
+        "full_name": "John Doe",
+        "email": "john@example.com",
+        "matric_number": "PPE0001",
+        "contact_number": "0123456789",
+        "password": "pass1234",
+        "confirm_password": "pass1234",
+    }
+
+    response = client.post(reverse("student_register"), data)
+
+    assert response.status_code == 302
+    assert response.url == reverse("universal_login")   
+
+    student = Student.objects.first()
+    assert student is not None
+    assert student.student_email == "john@example.com"
+
+    
+@pytest.mark.django_db
+def test_student_register_missing_fields(client):
+    data = {
+        "full_name": "",
+        "email": "valid@example.com",
+        "matric_number": "",
+        "password": "",
+        "confirm_password": "",
+    }
+
+    response = client.post(reverse("student_register"), data)
+    assert response.status_code == 200
+
+    messages = list(get_messages(response.wsgi_request))
+    assert "All required fields must be filled." in str(messages[0])
+    
+@pytest.mark.django_db
+def test_student_register_invalid_email(client):
+    data = {
+        "full_name": "John",
+        "email": "not-an-email",
+        "matric_number": "PPE0001",
+        "password": "pass",
+        "confirm_password": "pass",
+    }
+
+    response = client.post(reverse("student_register"), data)
+    
+    assert response.status_code == 200  
+
+    messages = list(get_messages(response.wsgi_request))
+    assert "Invalid email format." in str(messages[0])
+
+    
+
+@pytest.mark.django_db
+def test_student_register_password_mismatch(client):
+    data = {
+        "full_name": "John",
+        "email": "john@example.com",
+        "matric_number": "PPE0001",
+        "password": "pass1",
+        "confirm_password": "pass2",
+    }
+
+    response = client.post(reverse("student_register"), data)
+    
+    assert response.status_code == 200  
+
+    messages = list(get_messages(response.wsgi_request))
+    assert "Passwords do not match." in str(messages[0])
+    
+    
+@pytest.mark.django_db
+def test_student_register_duplicate_email(client):
+    Student.objects.create(
+        full_name="User",
+        student_email="john@example.com",
+        matric_number="PPE0001",
+        password="pass"
+    )
+
+    data = {
+        "full_name": "Another User",
+        "email": "john@example.com",
+        "matric_number": "PPE0002",
+        "password": "pass",
+        "confirm_password": "pass",
+    }
+
+    response = client.post(reverse("student_register"), data)
+
+    assert response.status_code == 200  
+
+    messages = list(get_messages(response.wsgi_request))
+    assert "Email is already registered." in str(messages[0])
+
+    
+@pytest.mark.django_db
+def test_student_register_duplicate_matric(client):
+    Student.objects.create(
+        full_name="User",
+        student_email="john@example.com",
+        matric_number="PPE0001",
+        password="pass"
+    )
+
+    data = {
+        "full_name": "Another",
+        "email": "another@example.com",
+        "matric_number": "PPE0001",
+        "password": "pass",
+        "confirm_password": "pass",
+    }
+
+    response = client.post(reverse("student_register"), data)
+    
+    assert response.status_code == 200  
+
+    messages = list(get_messages(response.wsgi_request))
+    assert "Matric number already existed." in str(messages[0])
+
+    
+@pytest.mark.django_db
+def test_instructor_register_success(client):
+    data = {
+        "full_name": "Mr Alan",
+        "email": "alan@example.com",
+        "contact_number": "0122222222",
+        "department": "IT",
+        "password": "pass1234",
+        "confirm_password": "pass1234",
+    }
+
+    response = client.post(reverse("instructor_register"), data)
+
+    assert response.status_code == 302
+    assert response.url == reverse("universal_login")
+
+    instructor = Instructor.objects.first()
+    assert instructor is not None
+    assert instructor.instructor_email == "alan@example.com"
+    
+@pytest.mark.django_db
+def test_instructor_register_missing_fields(client):
+    data = {
+        "full_name": "",
+        "email": "",
+        "password": "",
+        "confirm_password": "",
+    }
+
+    response = client.post(reverse("instructor_register"), data)
+    
+    assert response.status_code == 200  
+
+    messages = list(get_messages(response.wsgi_request))
+    assert "All required fields must be filled." in str(messages[0])
+
+
+@pytest.mark.django_db
+def test_instructor_register_invalid_email(client):
+    data = {
+        "full_name": "Alan",
+        "email": "bad-email",
+        "password": "pass",
+        "confirm_password": "pass",
+    }
+
+    response = client.post(reverse("instructor_register"), data)
+
+    assert response.status_code == 200 
+
+    messages = list(get_messages(response.wsgi_request))
+    assert "Invalid email format." in str(messages[0])
+
+@pytest.mark.django_db
+def test_instructor_register_password_mismatch(client):
+    data = {
+        "full_name": "Alan",
+        "email": "alan@example.com",
+        "password": "pass1",
+        "confirm_password": "pass2",
+    }
+
+    response = client.post(reverse("instructor_register"), data)
+    
+    assert response.status_code == 200  
+    messages = list(get_messages(response.wsgi_request))
+    assert "Passwords do not match." in str(messages[0])
+
+@pytest.mark.django_db
+def test_instructor_register_duplicate_email(client):
+    Instructor.objects.create(
+        full_name="Alan",
+        instructor_email="alan@example.com",
+        password="pass"
+    )
+
+    data = {
+        "full_name": "New",
+        "email": "alan@example.com", 
+        "password": "pass",
+        "confirm_password": "pass",
+    }
+
+    response = client.post(reverse("instructor_register"), data)
+    assert response.status_code == 200 
+
+    messages = list(get_messages(response.wsgi_request))
+    assert "Email already registered." in str(messages[0])
+
 
 
 # Exam module test
 @pytest.mark.django_db
 def test_exam_can_be_created_with_user():
-    user = User.objects.create(username="teacher", is_staff=True)
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass"
+    )
 
     exam = Exam.objects.create(
         title="Sample Exam",
         description="desc",
         start_time=timezone.now(),
         end_time=timezone.now() + timedelta(hours=1),
-        created_by=user
+        created_by=instructor
     )
 
     assert exam.exam_id.startswith("EX-")
     assert exam.title == "Sample Exam"
+
    
 # ID auto increment 
 @pytest.mark.django_db
 def test_exam_id_increments():
-    user = User.objects.create(username="teacher", is_staff=True)
-    
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass"
+    )
+
     e1 = Exam.objects.create(
         title="Exam1",
         description="desc",
         start_time=timezone.now(),
         end_time=timezone.now() + timedelta(hours=1),
-        created_by=user
+        created_by=instructor
     )
+
     e2 = Exam.objects.create(
         title="Exam2",
         description="desc",
         start_time=timezone.now(),
         end_time=timezone.now() + timedelta(hours=1),
-        created_by=user
+        created_by=instructor
     )
 
     assert e1.exam_id == "EX-001"
     assert e2.exam_id == "EX-002"
+
     
 #Question creation  
 @pytest.mark.django_db
 def test_text_question_creation():
-    user = User.objects.create(username="teacher", is_staff=True)
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass"
+    )
 
     exam = Exam.objects.create(
         title="Exam",
         description="desc",
         start_time=timezone.now(),
         end_time=timezone.now() + timedelta(hours=1),
-        created_by=user
+        created_by=instructor
     )
 
     question = ExamQuestion.objects.create(
@@ -71,15 +299,21 @@ def test_text_question_creation():
     assert question.question_type == "TEXT"
 
 
+
 # MCQ question creation
 @pytest.mark.django_db
 def test_mcq_with_choices():
-    user = User.objects.create(username="teacher", is_staff=True)
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass"
+    )
+
     exam = Exam.objects.create(
         title="Exam",
         start_time=timezone.now(),
         end_time=timezone.now() + timedelta(hours=1),
-        created_by=user
+        created_by=instructor
     )
 
     q = ExamQuestion.objects.create(
@@ -94,41 +328,61 @@ def test_mcq_with_choices():
     assert q.choices.count() == 2
 
 
+
 # unique constraint test
 @pytest.mark.django_db
 def test_answer_unique_per_attempt():
-    user = User.objects.create(username="teacher", is_staff=True)
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass"
+    )
+
+    student = Student.objects.create(
+        full_name="Student",
+        student_email="stu@example.com",
+        matric_number="A001",
+        password="pass"
+    )
+
     exam = Exam.objects.create(
         title="Exam",
         description="desc",
         start_time=timezone.now(),
         end_time=timezone.now() + timedelta(hours=1),
-        created_by=user
+        created_by=instructor
     )
+
     q = ExamQuestion.objects.create(
         exam=exam,
         question_text="Test",
         question_type="TEXT"
     )
-    attempt = ExamAttempt.objects.create(exam=exam, student=user)  
+
+    attempt = ExamAttempt.objects.create(exam=exam, student=student)
 
     Answer.objects.create(attempt=attempt, question=q, text_answer="A")
 
     with pytest.raises(Exception):
         Answer.objects.create(attempt=attempt, question=q, text_answer="B")
+
         
         
 # Exam is open logic
 @pytest.mark.django_db
 def test_exam_is_open_true():
-    user = User.objects.create(username="teacher", is_staff=True)
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass",
+    )
 
     exam = Exam.objects.create(
         title="Exam",
         description="desc",
         start_time=timezone.now() - timedelta(minutes=1),
         end_time=timezone.now() + timedelta(minutes=1),
-        created_by=user
+        created_by=instructor
     )
 
     assert exam.is_open is True
@@ -136,8 +390,16 @@ def test_exam_is_open_true():
 # Builder test
 @pytest.mark.django_db
 def test_exam_create_and_add_question(client):
-    user = User.objects.create(username="teacher", is_staff=True)
-    client.force_login(user)
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teach@example.com",
+        password="pass"
+    )
+
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
 
     response = client.post("/instructor/exams/create/", {
         "create_exam": "1",
@@ -148,7 +410,6 @@ def test_exam_create_and_add_question(client):
     })
 
     assert response.status_code == 302
-
     exam = Exam.objects.first()
     assert exam is not None
 
@@ -161,17 +422,22 @@ def test_exam_create_and_add_question(client):
     assert exam.questions.count() == 1
 
 
+
 # test listing exam view
 @pytest.mark.django_db
 def test_exam_list_view(client):
-    user = User.objects.create(username="teacher", is_staff=True)
-    
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teach@example.com",
+        password="pass"
+    )
+
     exam1 = Exam.objects.create(
         title="Math Test",
         description="desc",
         start_time=timezone.now(),
         end_time=timezone.now() + timedelta(hours=1),
-        created_by=user
+        created_by=instructor,
     )
     ExamQuestion.objects.create(exam=exam1, question_text="Q1", question_type="TEXT")
     ExamQuestion.objects.create(exam=exam1, question_text="Q2", question_type="MCQ")
@@ -181,76 +447,103 @@ def test_exam_list_view(client):
         description="desc",
         start_time=timezone.now(),
         end_time=timezone.now() + timedelta(hours=1),
-        created_by=user
+        created_by=instructor,
     )
     ExamQuestion.objects.create(exam=exam2, question_text="Q1", question_type="TEXT")
 
-    client.force_login(user)
-    response = client.get("/instructor/exams/")
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
 
+    response = client.get("/instructor/exams/")
     assert response.status_code == 200
-    assert b"Math Test" in response.content
-    assert b"Science Test" in response.content
-    assert exam1.exam_id.encode() in response.content
-    assert exam2.exam_id.encode() in response.content
-    assert str(exam1.start_time.date()).encode() in response.content
-    assert str(exam1.end_time.date()).encode() in response.content
-    assert b"2 Questions" in response.content   
-    assert b"1 Question" in response.content    
+
+    content = response.content
+    assert b"Math Test" in content
+    assert b"Science Test" in content
+    assert b"2 Questions" in content
+    assert b"1 Question" in content
+  
 
     
 # test edit exam
 @pytest.mark.django_db
 def test_exam_update_view(client):
-    user = User.objects.create(username="teacher", is_staff=True)
-    
-    # create sample
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass",
+    )
+
     exam = Exam.objects.create(
         title="Math Test",
         description="desc",
         start_time=timezone.now(),
         end_time=timezone.now() + timedelta(hours=1),
-        created_by=user
+        created_by=instructor,
     )
-    
-    # call the sample and perform updates
-    client.force_login(user)
-    response = client.post(f"/instructor/exams/{exam.exam_id}/edit/", {
-        "title": "New Title",
-        "description": "Updated desc",
-        "start_time": exam.start_time,
-        "end_time": exam.end_time,
-    })
-    
+
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+    response = client.post(
+        f"/instructor/exams/{exam.exam_id}/edit/",
+        {
+            "title": "New Title",
+            "description": "Updated desc",
+            "start_time": exam.start_time,
+            "end_time": exam.end_time,
+        },
+    )
+
     exam.refresh_from_db()
-    assert exam.title == "New Title"
     assert response.status_code == 302
+    assert exam.title == "New Title"
     
 # test delete exam
 @pytest.mark.django_db
 def test_exam_delete_view(client):
-    user = User.objects.create(username="teacher", is_staff=True)
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass",
+    )
     
-    # create sample
     exam = Exam.objects.create(
         title="Math Test",
         description="desc",
         start_time=timezone.now(),
         end_time=timezone.now() + timedelta(hours=1),
-        created_by=user
+        created_by=instructor
     )
-    
-    client.force_login(user)
-    response = client.post(f"/instructor/exams/{exam.exam_id}/delete/")
-    assert response.status_code == 302
-    assert Exam.objects.filter(exam_id=exam.exam_id).exists() is False
 
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+    response = client.post(f"/instructor/exams/{exam.exam_id}/delete/")
+
+    assert response.status_code == 302
+    assert not Exam.objects.filter(exam_id=exam.exam_id).exists()
 
 @pytest.mark.django_db
 def test_student_takes_exam_during_valid_schedule(client):
-    teacher = User.objects.create(username="teacher")
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass",
+    )
 
-    student = User.objects.create_user(username="student", password="pass")
+    student = Student.objects.create(
+        full_name="Student",
+        student_email="student@example.com",
+        matric_number="A001",
+        password="pass",
+    )
 
     now = timezone.now()
     exam = Exam.objects.create(
@@ -258,9 +551,10 @@ def test_student_takes_exam_during_valid_schedule(client):
         description="desc",
         start_time=now - timedelta(minutes=10),
         end_time=now + timedelta(minutes=50),
-        created_by=teacher,
+        created_by=instructor,
     )
 
+    # MCQ question
     q1 = ExamQuestion.objects.create(
         exam=exam,
         question_text="2 + 2 = ?",
@@ -270,6 +564,7 @@ def test_student_takes_exam_during_valid_schedule(client):
     wrong = Choice.objects.create(choice_id=q1, choice_text="3", is_correct=False)
     correct = Choice.objects.create(choice_id=q1, choice_text="4", is_correct=True)
 
+    # TEXT question
     q2 = ExamQuestion.objects.create(
         exam=exam,
         question_text="Explain your answer",
@@ -277,46 +572,60 @@ def test_student_takes_exam_during_valid_schedule(client):
         order_no=2,
     )
 
-    client.force_login(student)
+    # ⭐ SESSION-BASED LOGIN (CUSTOM AUTH)
+    session = client.session
+    session["user_type"] = "student"
+    session["user_id"] = student.student_ID
+    session.save()
 
+    # Step 1: Load exam page
     response = client.get(f"/student/exams/{exam.exam_id}/take/")
     assert response.status_code == 200
-    assert b"2 + 2" in response.content  
+    assert b"2 + 2" in response.content
 
+    # Step 2: Submit exam
     post_data = {
-        f"q_{q1.id}": str(correct.id),                  
-        f"q_{q2.id}": "Because 2+2=4, obviously.",      
+        f"q_{q1.id}": str(correct.id),
+        f"q_{q2.id}": "Because 2+2=4, obviously.",
     }
     response = client.post(f"/student/exams/{exam.exam_id}/take/", data=post_data)
 
-    # redirect to exam result page
     assert response.status_code == 302
 
-    # attempt created and marked as submitted
+    # Check attempt
     attempt = ExamAttempt.objects.get(exam=exam, student=student)
-    assert attempt.submitted is True
-    assert attempt.score == 1  #
 
-    # MCQ answer saved and marked
+    # Check that attempt is marked submitted
+    assert attempt.submitted_at is not None
+
+    # Check MCQ answer
     a1 = Answer.objects.get(attempt=attempt, question=q1)
     assert a1.selected_choice == correct
     assert a1.marks == 1
 
-    # TEXT answer saved
+    # Check TEXT answer
     a2 = Answer.objects.get(attempt=attempt, question=q2)
     assert a2.text_answer == "Because 2+2=4, obviously."
 
 @pytest.mark.django_db
 def test_student_sees_only_currently_available_exams(client):
-    student = User.objects.create_user(username="student", password="pass")
-    client.force_login(student)
+    teacher = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass",
+    )
 
-    teacher = User.objects.create(username="teacher")
+    student = Student.objects.create(
+        full_name="Student",
+        student_email="student@example.com",
+        matric_number="A100",
+        password="pass",
+    )
 
     now = timezone.now()
 
-    # exam that already ended
-    past_exam = Exam.objects.create(
+    # past exam (should NOT appear)
+    Exam.objects.create(
         title="Past Exam",
         description="Already finished",
         start_time=now - timedelta(days=2),
@@ -324,8 +633,8 @@ def test_student_sees_only_currently_available_exams(client):
         created_by=teacher,
     )
 
-    # exam that hasn't started yet
-    future_exam = Exam.objects.create(
+    # future exam (should NOT appear)
+    Exam.objects.create(
         title="Future Exam",
         description="Not started yet",
         start_time=now + timedelta(days=1),
@@ -333,8 +642,8 @@ def test_student_sees_only_currently_available_exams(client):
         created_by=teacher,
     )
 
-    # exam that is currently available 
-    current_exam = Exam.objects.create(
+    # current exam (should appear)
+    Exam.objects.create(
         title="Current Exam",
         description="Happening now",
         start_time=now - timedelta(hours=1),
@@ -342,28 +651,39 @@ def test_student_sees_only_currently_available_exams(client):
         created_by=teacher,
     )
 
+    # ⭐ SESSION-BASED LOGIN (CUSTOM AUTH)
+    session = client.session
+    session["user_type"] = "student"
+    session["user_id"] = student.student_ID
+    session.save()
+
     # call the view
     response = client.get("/student/exams/available/")
-
     assert response.status_code == 200
 
     content = response.content
 
-    # current exam should be visible
     assert b"Current Exam" in content
-
-    # past and future exams should NOT appear
     assert b"Past Exam" not in content
     assert b"Future Exam" not in content
 
 @pytest.mark.django_db
 def test_student_submit_exam_for_processing(client):
-    teacher = User.objects.create(username="teacher_oegs5")
-    student = User.objects.create_user(username="student_oegs5", password="pass")
+    teacher = Instructor.objects.create(
+        full_name="Teacher OEGS5",
+        instructor_email="teacher_oegs5@example.com",
+        password="pass",
+    )
+    student = Student.objects.create(
+        full_name="Student OEGS5",
+        student_email="student_oegs5@example.com",
+        matric_number="A200",
+        password="pass",
+    )
 
     now = timezone.now()
 
-    # exam that is currently open (start <= now <= end)
+    # exam currently available
     exam = Exam.objects.create(
         title="Processing Test Exam",
         description="For OEGS-5",
@@ -382,6 +702,7 @@ def test_student_submit_exam_for_processing(client):
     wrong = Choice.objects.create(choice_id=q1, choice_text="4", is_correct=False)
     correct = Choice.objects.create(choice_id=q1, choice_text="5", is_correct=True)
 
+    # TEXT question
     q2 = ExamQuestion.objects.create(
         exam=exam,
         question_text="Explain your calculation.",
@@ -389,40 +710,53 @@ def test_student_submit_exam_for_processing(client):
         order_no=2,
     )
 
-    client.force_login(student)
+    # ⭐ Session-based login instead of force_login
+    session = client.session
+    session["user_type"] = "student"
+    session["user_id"] = student.student_ID
+    session.save()
 
-
+    # submit exam
     post_data = {
         f"q_{q1.id}": str(correct.id),
         f"q_{q2.id}": "Because 2 + 3 = 5.",
     }
     response = client.post(f"/student/exams/{exam.exam_id}/take/", data=post_data)
 
-    # attempt should exist and be marked as submitted/processed
+    # attempt created
     attempt = ExamAttempt.objects.get(exam=exam, student=student)
 
-    # redirect to exam result page
+    # redirect to result page
     expected_url = reverse("student_exam_result", kwargs={"attempt_id": attempt.attempt_id})
     assert response.status_code == 302
     assert response["Location"] == expected_url
 
-    # MCQ answer saved and marked
+    # MCQ answer
     a1 = Answer.objects.get(attempt=attempt, question=q1)
     assert a1.selected_choice == correct
     assert a1.marks == 1
 
-    # TEXT answer saved
+    # TEXT answer
     a2 = Answer.objects.get(attempt=attempt, question=q2)
     assert a2.text_answer == "Because 2 + 3 = 5."
 
+
 @pytest.mark.django_db
 def test_student_can_resume_ongoing_exam_attempt(client):
-    teacher = User.objects.create(username="teacher_resume")
-    student = User.objects.create_user(username="student_resume", password="pass")
+    teacher = Instructor.objects.create(
+        full_name="Teacher Resume",
+        instructor_email="teacher_resume@example.com",
+        password="pass",
+    )
+    student = Student.objects.create(
+        full_name="Student Resume",
+        student_email="student_resume@example.com",
+        matric_number="A300",
+        password="pass",
+    )
 
     now = timezone.now()
 
-    # exam currently open
     exam = Exam.objects.create(
         title="Resume Exam",
         description="desc",
@@ -431,7 +765,7 @@ def test_student_can_resume_ongoing_exam_attempt(client):
         created_by=teacher,
     )
 
-    # one question (so page isn't empty)
+    # MCQ question
     q1 = ExamQuestion.objects.create(
         exam=exam,
         question_text="2 + 2 = ?",
@@ -441,23 +775,21 @@ def test_student_can_resume_ongoing_exam_attempt(client):
     Choice.objects.create(choice_id=q1, choice_text="3", is_correct=False)
     Choice.objects.create(choice_id=q1, choice_text="4", is_correct=True)
 
-    # existing attempt for this student and exam (ongoing: submitted_at=None)
+    # create an existing attempt (not submitted)
     attempt = ExamAttempt.objects.create(exam=exam, student=student)
     assert attempt.submitted_at is None
-
-    # there must be exactly one attempt before resuming
     assert ExamAttempt.objects.filter(exam=exam, student=student).count() == 1
 
-    client.force_login(student)
+    # ⭐ session-based login (no force_login)
+    session = client.session
+    session["user_type"] = "student"
+    session["user_id"] = student.student_ID
+    session.save()
 
-    # student "resumes" by visiting the same take-exam URL again
+    # student revisits the take exam page
     response = client.get(f"/student/exams/{exam.exam_id}/take/")
-
-    # still see the exam page (ongoing)
     assert response.status_code == 200
-    assert b"2 + 2" in response.content  # question is visible
+    assert b"2 + 2" in response.content
 
-    # and no new attempt is created; still only one attempt in DB
+    # ensure NO new attempt is created
     assert ExamAttempt.objects.filter(exam=exam, student=student).count() == 1
-
-

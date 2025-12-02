@@ -3,9 +3,7 @@
 {% block title %}Exam Result – {{ attempt.exam.title }}{% endblock %}
 
 {% block content %}
-
 <div class="container mt-5">
-
     <!-- Header -->
     <div class="card shadow-sm mb-4">
         <div class="card-body d-flex justify-content-between align-items-start">
@@ -23,14 +21,22 @@
                 <div class="small text-muted">
                     (auto-marked MCQ score)
                 </div>
+                <div class="mt-2">
+                    <span class="badge bg-info text-dark">Grade: {{ grade }}</span>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- Submission Info -->
+    <div class="alert alert-info shadow-sm mb-4">
+        <strong>Submission Date & Time:</strong>
+        {{ attempt.submitted_at|date:"Y-m-d H:i:s" }}
+    </div>
+
     <!-- Summary -->
     <div class="alert alert-success shadow-sm mb-4">
-        Your exam has been submitted successfully.
-        <br>
+        Your exam has been submitted successfully.<br>
         MCQ questions were auto-marked. Text answers will be graded by the instructor if required.
     </div>
 
@@ -38,13 +44,11 @@
     <div class="card shadow-sm">
         <div class="card-body">
             <h5 class="fw-bold mb-3">Your Answers</h5>
-
             <table class="table table-sm align-middle">
                 <thead>
                     <tr>
                         <th style="width: 45%;">Question</th>
-                        <th style="width: 35%;">Your Answer</th>
-                        <th style="width: 20%;">Marks</th>
+                        <th style="width: 20%;">Answer</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -66,13 +70,7 @@
                                 {% endif %}
                             {% endif %}
                         </td>
-                        <td>
-                            {% if answer.marks is not None %}
-                                {{ answer.marks }}
-                            {% else %}
-                                <span class="text-muted">Pending</span>
-                            {% endif %}
-                        </td>
+
                     </tr>
                     {% empty %}
                     <tr>
@@ -83,10 +81,12 @@
                     {% endfor %}
                 </tbody>
             </table>
-
         </div>
     </div>
 
+    <!-- Continue Button -->
+    <div class="mt-4 text-center">
+        <a href="/" class="btn btn-primary px-5 py-2">Continue</a>
+    </div>
 </div>
-
 {% endblock %}

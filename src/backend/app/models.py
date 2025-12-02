@@ -1,9 +1,75 @@
 from django.utils import timezone
 from django.db import models
 from django.conf import settings
+from django.contrib.auth.hashers import make_password, check_password
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 import uuid
+
+#Helper function
+def generate_student_id():
+    last = Student.objects.order_by("-student_ID").first()
+    if not last:
+        return "STU001"
+    
+    last_id = int(last.student_ID.replace("STU", ""))
+    new_id = last_id + 1
+    return "STU" + str(new_id).zfill(3)
+
+def generate_instructor_id():
+    last = Instructor.objects.order_by("-instructor_ID").first()
+    if not last:
+        return "INS001"
+    
+    last_id = int(last.instructor_ID.replace("INS", ""))
+    new_id = last_id + 1
+    return "INS" + str(new_id).zfill(3)
+
+matric_validator = RegexValidator(
+    regex=r'^PPE\d{4}$',
+    message="Matric number must follow the format PPE0000 (e.g., PPE1234)."
+)
+
+
 # User models
-#todo
+class Student(models.Model):
+    student_ID = models.CharField(max_length=10, primary_key=True, editable=False)
+    full_name =  models.CharField(max_length=255)
+    student_email =  models.EmailField(unique=True)
+    matric_number = models.CharField(max_length=50, unique=True, validators=[matric_validator]) #exam number
+    contact_number = models.CharField(max_length=20, blank=True, null=True)
+    password = models.CharField(max_length=255)
+    role = models.CharField(max_length=20, default="student")
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def save(self, *args, **kwargs):
+        validate_email(self.student_email)
+        if not self.student_ID:
+            self.student_ID = generate_student_id()
+        super().save(*args, **kwargs)
+        
+    def __str__(self):
+        return f"{self.student_ID} - {self.full_name}"
+    
+class Instructor(models.Model):
+    instructor_ID =  models.CharField(max_length=10, primary_key=True, editable=False)
+    full_name = models.CharField(max_length=255)
+    instructor_email = models.EmailField(unique=True)
+    contact_number = models.CharField(max_length=20, blank=True, null=True)
+    department = models.CharField(max_length=100, blank=True, null=True)
+    password = models.CharField(max_length=255)
+    role = models.CharField(max_length=20, default="instructor")
+    
+    def save(self, *args, **kwargs):
+        validate_email(self.instructor_email)
+        if not self.instructor_ID:
+            self.instructor_ID = generate_instructor_id()
+        super().save(*args, **kwargs)
+        
+    def __str__(self):
+        return f"{self.instructor_ID} - {self.full_name}"
+    
 
 # Examination models
 
@@ -13,13 +79,19 @@ class Exam(models.Model):
     description = models.TextField(blank=True)
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
-    created_by = models.ForeignKey('auth.User', on_delete=models.CASCADE) # to change when user is created
+    created_by = models.ForeignKey(Instructor, on_delete=models.CASCADE)
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    def clean(self):
+        if self.start_time and self.end_time:
+            if self.end_time <= self.start_time:
+                raise ValidationError("End time must be after start time.")
+    
     # custom exam id
     def save(self, *args, **kwargs):
+        self.full_clean()
         if not self.exam_id:  
             last_exam = Exam.objects.order_by('-id').first()
             if last_exam:
@@ -46,9 +118,9 @@ class ExamQuestion(models.Model):
         ("MCQ", "Multiple Choice"),
         ("TEXT", "Short Answer"),
     ])
-    
     order_no = models.PositiveIntegerField(default=1)
-    
+    marks = models.FloatField(default=1)  # <-- Add this line
+
     def __str__(self):
         return f"Q{self.order_no}: {self.question_text[:30]}"
     
@@ -64,7 +136,7 @@ class Choice(models.Model):   # for mcq only
 class ExamAttempt(models.Model):
     attempt_id = models.CharField(max_length=20, unique=True, editable=False)
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE, null=True)
-    student = models.ForeignKey('auth.User',  on_delete=models.CASCADE) # to be change later
+    student = models.ForeignKey(Student, on_delete=models.CASCADE)
     
     started_at = models.DateTimeField(auto_now_add=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
@@ -96,6 +168,19 @@ class Answer(models.Model):
     
     class Meta:
         unique_together = ('attempt', 'question')
+        
+    def clean(self):
+        if self.question and self.question.question_type == "MCQ":
+            if not self.selected_choice:
+                raise ValidationError("MCQ answers must have a selected choice.")
+
+        if self.question and self.question.question_type == "TEXT":
+            if not self.text_answer or not self.text_answer.strip():
+                raise ValidationError("Text answers cannot be empty.")
+            
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
         
     def __str__(self):
         return f"Answer for {self.question.id} by Attempt {self.attempt.attempt_id}"

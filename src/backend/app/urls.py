@@ -4,10 +4,14 @@ from django.contrib.auth import views as auth_views
 
 urlpatterns = [
     path("", views.homepage, name="homepage"),
-    path('login/', auth_views.LoginView.as_view(template_name='login.html',redirect_authenticated_user=True), name='login'),
+    path("signup/", views.signup_role_select, name="signup_role_select"),
+    path("login/", views.universal_login, name="universal_login"),
     path("logout/", views.custom_logout, name="logout"),
-
     
+    #User module
+    path("register/student/", views.student_register, name="student_register"),
+    path("register/instructor/", views.instructor_register, name="instructor_register"),
+
     #Exam Module
     path("instructor/exams/", views.exam_list, name="instructor_exam_list"),
     path("instructor/exams/create/", views.exam_create, name="instructor_exam_create"),
@@ -19,8 +23,11 @@ urlpatterns = [
     path("instructor/exams/<str:exam_id>/questions/add/", views.question_create, name="instructor_question_create"),
     path("instructor/exams/<str:exam_id>/questions/<int:question_id>/delete/", views.question_delete, name="instructor_question_delete"),
     path("instructor/questions/<int:question_id>/choices/add/", views.choice_add, name="instructor_choice_add"),
-    path("student/exams/available/", views.available_exams, name="student_available_exams"),
+    path("student/exams/", views.available_exams, name="student_available_exams"),
+    path("student/exams/available/", views.available_exams, name="student_available_exams_alias"),
     path("student/exams/<str:exam_id>/take/", views.take_exam, name="student_take_exam"),
     path("student/attempts/<str:attempt_id>/result/", views.exam_result, name="student_exam_result"),
-    
+    path("student/results/", views.student_results, name="student_results"),
+    path('instructor/exams/<str:exam_id>/submissions/', views.exam_submissions, name='instructor_exam_submissions'),
+    path('instructor/submission/<str:attempt_id>/', views.view_submission, name='instructor_view_submission'),
 ]
