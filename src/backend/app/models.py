@@ -4,6 +4,7 @@ from django.conf import settings
 from django.contrib.auth.hashers import make_password, check_password
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 import uuid
 
 #Helper function
@@ -25,13 +26,18 @@ def generate_instructor_id():
     new_id = last_id + 1
     return "INS" + str(new_id).zfill(3)
 
+matric_validator = RegexValidator(
+    regex=r'^PPE\d{4}$',
+    message="Matric number must follow the format PPE0000 (e.g., PPE1234)."
+)
+
 
 # User models
 class Student(models.Model):
     student_ID = models.CharField(max_length=10, primary_key=True, editable=False)
     full_name =  models.CharField(max_length=255)
     student_email =  models.EmailField(unique=True)
-    matric_number = models.CharField(max_length=50, unique=True) #exam number
+    matric_number = models.CharField(max_length=50, unique=True, validators=[matric_validator]) #exam number
     contact_number = models.CharField(max_length=20, blank=True, null=True)
     password = models.CharField(max_length=255)
     role = models.CharField(max_length=20, default="student")
