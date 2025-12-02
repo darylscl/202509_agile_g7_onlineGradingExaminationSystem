@@ -13,7 +13,7 @@ def test_student_register_success(client):
     data = {
         "full_name": "John Doe",
         "email": "john@example.com",
-        "matric_number": "A001",
+        "matric_number": "PPE0001",
         "contact_number": "0123456789",
         "password": "pass1234",
         "confirm_password": "pass1234",
@@ -40,8 +40,7 @@ def test_student_register_missing_fields(client):
     }
 
     response = client.post(reverse("student_register"), data)
-    assert response.status_code == 302
-    assert response.url == reverse("student_register")
+    assert response.status_code == 200
 
     messages = list(get_messages(response.wsgi_request))
     assert "All required fields must be filled." in str(messages[0])
@@ -51,17 +50,18 @@ def test_student_register_invalid_email(client):
     data = {
         "full_name": "John",
         "email": "not-an-email",
-        "matric_number": "A001",
+        "matric_number": "PPE0001",
         "password": "pass",
         "confirm_password": "pass",
     }
 
     response = client.post(reverse("student_register"), data)
-    assert response.status_code == 302
-    assert response.url == reverse("student_register")
+    
+    assert response.status_code == 200  
 
     messages = list(get_messages(response.wsgi_request))
     assert "Invalid email format." in str(messages[0])
+
     
 
 @pytest.mark.django_db
@@ -69,61 +69,68 @@ def test_student_register_password_mismatch(client):
     data = {
         "full_name": "John",
         "email": "john@example.com",
-        "matric_number": "A001",
+        "matric_number": "PPE0001",
         "password": "pass1",
         "confirm_password": "pass2",
     }
 
     response = client.post(reverse("student_register"), data)
-    assert response.status_code == 302
-    assert response.url == reverse("student_register")
+    
+    assert response.status_code == 200  
 
     messages = list(get_messages(response.wsgi_request))
     assert "Passwords do not match." in str(messages[0])
+    
     
 @pytest.mark.django_db
 def test_student_register_duplicate_email(client):
     Student.objects.create(
         full_name="User",
         student_email="john@example.com",
-        matric_number="A001",
+        matric_number="PPE0001",
         password="pass"
     )
 
     data = {
         "full_name": "Another User",
-        "email": "john@example.com", 
-        "matric_number": "A002",
+        "email": "john@example.com",
+        "matric_number": "PPE0002",
         "password": "pass",
         "confirm_password": "pass",
     }
 
     response = client.post(reverse("student_register"), data)
 
+    assert response.status_code == 200  
+
     messages = list(get_messages(response.wsgi_request))
     assert "Email is already registered." in str(messages[0])
+
     
 @pytest.mark.django_db
 def test_student_register_duplicate_matric(client):
     Student.objects.create(
         full_name="User",
         student_email="john@example.com",
-        matric_number="A001",
+        matric_number="PPE0001",
         password="pass"
     )
 
     data = {
         "full_name": "Another",
         "email": "another@example.com",
-        "matric_number": "A001",
+        "matric_number": "PPE0001",
         "password": "pass",
         "confirm_password": "pass",
     }
 
     response = client.post(reverse("student_register"), data)
+    
+    assert response.status_code == 200  
 
     messages = list(get_messages(response.wsgi_request))
     assert "Matric number already existed." in str(messages[0])
+
     
 @pytest.mark.django_db
 def test_instructor_register_success(client):
@@ -155,11 +162,12 @@ def test_instructor_register_missing_fields(client):
     }
 
     response = client.post(reverse("instructor_register"), data)
-    assert response.status_code == 302
-    assert response.url == reverse("instructor_register")
+    
+    assert response.status_code == 200  
 
     messages = list(get_messages(response.wsgi_request))
     assert "All required fields must be filled." in str(messages[0])
+
 
 @pytest.mark.django_db
 def test_instructor_register_invalid_email(client):
@@ -171,6 +179,8 @@ def test_instructor_register_invalid_email(client):
     }
 
     response = client.post(reverse("instructor_register"), data)
+
+    assert response.status_code == 200 
 
     messages = list(get_messages(response.wsgi_request))
     assert "Invalid email format." in str(messages[0])
@@ -185,7 +195,8 @@ def test_instructor_register_password_mismatch(client):
     }
 
     response = client.post(reverse("instructor_register"), data)
-
+    
+    assert response.status_code == 200  
     messages = list(get_messages(response.wsgi_request))
     assert "Passwords do not match." in str(messages[0])
 
@@ -205,9 +216,11 @@ def test_instructor_register_duplicate_email(client):
     }
 
     response = client.post(reverse("instructor_register"), data)
+    assert response.status_code == 200 
 
     messages = list(get_messages(response.wsgi_request))
     assert "Email already registered." in str(messages[0])
+
 
 
 # Exam module test

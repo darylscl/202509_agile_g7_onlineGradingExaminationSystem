@@ -120,42 +120,49 @@ def student_register(request):
         contact = request.POST.get("contact_number")
         password = request.POST.get("password")
         confirm = request.POST.get("confirm_password")
-        
-        #validation
+
+        context = {
+            "full_name": full_name,
+            "email": email,
+            "matric": matric,
+            "contact": contact,
+        }
+
         if not full_name or not email or not matric or not password:
             messages.error(request, "All required fields must be filled.")
-            return redirect("student_register")
-        
+            return render(request, "app/student/register.html", context)
+
         try:
             validate_email(email)
         except ValidationError:
             messages.error(request, "Invalid email format.")
-            return redirect("student_register")
-        
+            return render(request, "app/student/register.html", context)
+
         if password != confirm:
             messages.error(request, "Passwords do not match.")
-            return redirect("student_register")
-        
+            return render(request, "app/student/register.html", context)
+
         if Student.objects.filter(student_email=email).exists():
             messages.error(request, "Email is already registered.")
-            return redirect("student_register")
-        
+            return render(request, "app/student/register.html", context)
+
         if Student.objects.filter(matric_number=matric).exists():
             messages.error(request, "Matric number already existed.")
-            return redirect("student_register")
-        
+            return render(request, "app/student/register.html", context)
+
         Student.objects.create(
             full_name=full_name,
             student_email=email,
             matric_number=matric,
             contact_number=contact,
-            password=make_password(password),  
+            password=make_password(password),
         )
-        
+
         messages.success(request, "Registration successful. Please log in.")
         return redirect("universal_login")
-    
+
     return render(request, "app/student/register.html")
+
 
 def instructor_register(request):
     if request.method == "POST":
@@ -165,37 +172,43 @@ def instructor_register(request):
         department = request.POST.get("department")
         password = request.POST.get("password")
         confirm = request.POST.get("confirm_password")
-        
-        #validation
+
+        context = {
+            "full_name": full_name,
+            "email": email,
+            "contact": contact,
+            "department": department,
+        }
+
         if not full_name or not email or not password:
             messages.error(request, "All required fields must be filled.")
-            return redirect("instructor_register")
-        
+            return render(request, "app/instructor/register.html", context)
+
         try:
             validate_email(email)
         except ValidationError:
             messages.error(request, "Invalid email format.")
-            return redirect("instructor_register")
-        
+            return render(request, "app/instructor/register.html", context)
+
         if password != confirm:
             messages.error(request, "Passwords do not match.")
-            return redirect("instructor_register")
-        
+            return render(request, "app/instructor/register.html", context)
+
         if Instructor.objects.filter(instructor_email=email).exists():
             messages.error(request, "Email already registered.")
-            return redirect("instructor_register")
-        
+            return render(request, "app/instructor/register.html", context)
+
         Instructor.objects.create(
             full_name=full_name,
             instructor_email=email,
             contact_number=contact,
             department=department,
-            password=make_password(password),  
+            password=make_password(password),
         )
-        
+
         messages.success(request, "Instructor account created. Please log in.")
         return redirect("universal_login")
-    
+
     return render(request, "app/instructor/register.html")
 
 # Exam Module Viewset
