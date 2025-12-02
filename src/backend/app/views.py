@@ -5,6 +5,11 @@ from django.utils import timezone
 from django.urls import reverse
 from django.contrib.auth.hashers import make_password
 from .models import *
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
+from django.shortcuts import get_object_or_404
+from django.contrib import messages
+
 
 
 #Session login
@@ -162,6 +167,88 @@ def student_register(request):
         return redirect("universal_login")
 
     return render(request, "app/student/register.html")
+
+#profile page@student_required
+def student_profile(request):
+    student_id = request.session.get("user_id")
+    student = get_object_or_404(Student, student_ID=student_id)
+
+    if request.method == "POST":
+        full_name = request.POST.get("full_name")
+        email = request.POST.get("student_email")
+        matric = request.POST.get("matric_number")
+        contact = request.POST.get("contact_number")
+
+        # simple validation
+        if not full_name or not email or not matric:
+            messages.error(request, "Full name, email and matric number are required.")
+            return render(request, "app/student/profile.html", {"student": student})
+
+        try:
+            validate_email(email)
+        except ValidationError:
+            messages.error(request, "Invalid email format.")
+            return render(request, "app/student/profile.html", {"student": student})
+
+        # prevent duplicate email/matric on other students
+        if Student.objects.filter(student_email=email).exclude(student_ID=student.student_ID).exists():
+            messages.error(request, "This email is already used by another student.")
+            return render(request, "app/student/profile.html", {"student": student})
+
+        if Student.objects.filter(matric_number=matric).exclude(student_ID=student.student_ID).exists():
+            messages.error(request, "This matric number is already used by another student.")
+            return render(request, "app/student/profile.html", {"student": student})
+
+        # update and save
+        student.full_name = full_name
+        student.student_email = email
+        student.matric_number = matric
+        student.contact_number = contact
+        student.save()
+
+        messages.success(request, "Profile updated successfully.")
+        # refresh object so template sees new values
+        return redirect("student_profile")
+
+    return render(request, "app/student/profile.html", {"student": student})
+
+
+@instructor_required
+def instructor_profile(request):
+    instructor_id = request.session.get("user_id")
+    instructor = get_object_or_404(Instructor, instructor_ID=instructor_id)
+
+    if request.method == "POST":
+        full_name = request.POST.get("full_name")
+        email = request.POST.get("instructor_email")
+        contact = request.POST.get("contact_number")
+        department = request.POST.get("department")
+
+        if not full_name or not email:
+            messages.error(request, "Full name and email are required.")
+            return render(request, "app/instructor/profile.html", {"instructor": instructor})
+
+        try:
+            validate_email(email)
+        except ValidationError:
+            messages.error(request, "Invalid email format.")
+            return render(request, "app/instructor/profile.html", {"instructor": instructor})
+
+        if Instructor.objects.filter(instructor_email=email).exclude(instructor_ID=instructor.instructor_ID).exists():
+            messages.error(request, "This email is already used by another instructor.")
+            return render(request, "app/instructor/profile.html", {"instructor": instructor})
+
+        instructor.full_name = full_name
+        instructor.instructor_email = email
+        instructor.contact_number = contact
+        instructor.department = department
+        instructor.save()
+
+        messages.success(request, "Profile updated successfully.")
+        return redirect("instructor_profile")
+
+    return render(request, "app/instructor/profile.html", {"instructor": instructor})
+
 
 
 def instructor_register(request):

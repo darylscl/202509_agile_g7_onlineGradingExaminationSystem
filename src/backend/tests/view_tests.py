@@ -6,6 +6,7 @@ from app.views import *
 import pytest
 from app.models import Exam, ExamQuestion, Choice, ExamAttempt, Answer
 from django.urls import reverse
+from django.core.validators import validate_email
 
 # User Module test
 @pytest.mark.django_db
@@ -793,3 +794,93 @@ def test_student_can_resume_ongoing_exam_attempt(client):
 
     # ensure NO new attempt is created
     assert ExamAttempt.objects.filter(exam=exam, student=student).count() == 1
+
+
+@pytest.mark.django_db
+def test_student_can_view_and_update_profile(client):
+    # Create a student in DB
+    student = Student.objects.create(
+        full_name="Test Student",
+        student_email="student1@example.com",
+        matric_number="1234567890",
+        contact_number="0123456789",
+        password="hashed-password",
+    )
+
+    # Simulate "logged in" student via session
+    session = client.session
+    session["user_type"] = "student"
+    session["user_id"] = student.student_ID
+    session.save()
+
+    url = reverse("student_profile")
+
+    # VIEW: student can see their profile page
+    response = client.get(url)
+    assert response.status_code == 200
+    assert b"Student Profile" in response.content
+    assert student.full_name.encode() in response.content
+    assert student.student_email.encode() in response.content
+
+    # UPDATE: student submits new profile data
+    new_data = {
+        "full_name": "Updated Student",
+        "student_email": "student_updated@example.com",
+        "matric_number": "0987654321",
+        "contact_number": "9999999999",
+    }
+    response = client.post(url, data=new_data, follow=True)
+
+    # Should render OK (either after redirect or directly)
+    assert response.status_code == 200
+
+    # Data should be updated in DB
+    student.refresh_from_db()
+    assert student.full_name == "Updated Student"
+    assert student.student_email == "student_updated@example.com"
+    assert student.matric_number == "0987654321"
+    assert student.contact_number == "9999999999"
+
+@pytest.mark.django_db
+def test_instructor_can_view_and_update_profile(client):
+    # Create an instructor in DB
+    instructor = Instructor.objects.create(
+        full_name="Test Instructor",
+        instructor_email="instructor1@example.com",
+        contact_number="0112345678",
+        department="Computer Science",
+        password="hashed-password",
+    )
+
+    # Simulate "logged in" instructor via session
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+    url = reverse("instructor_profile")
+
+    # VIEW: instructor can see their profile page
+    response = client.get(url)
+    assert response.status_code == 200
+    assert b"Instructor Profile" in response.content
+    assert instructor.full_name.encode() in response.content
+    assert instructor.instructor_email.encode() in response.content
+
+    # UPDATE: instructor submits new profile data
+    new_data = {
+        "full_name": "Updated Instructor",
+        "instructor_email": "instructor_updated@example.com",
+        "contact_number": "0222222222",
+        "department": "Information Technology",
+    }
+    response = client.post(url, data=new_data, follow=True)
+
+    assert response.status_code == 200
+
+    # Data should be updated in DB
+    instructor.refresh_from_db()
+    assert instructor.full_name == "Updated Instructor"
+    assert instructor.instructor_email == "instructor_updated@example.com"
+    assert instructor.contact_number == "0222222222"
+    assert instructor.department == "Information Technology"
