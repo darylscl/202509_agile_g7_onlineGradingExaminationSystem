@@ -91,10 +91,19 @@
                             style="background-color:#1b263b;">
 
                             <li>
-                                <a class="dropdown-item text-light nav-dropdown-hover" href="#">
-                                    <i class="bi bi-person-lines-fill me-2"></i> Profile
-                                </a>
+                                {% if request.session.user_type == "instructor" %}
+                                    <a class="dropdown-item text-light nav-dropdown-hover"
+                                    href="{% url 'instructor_profile' %}">
+                                        <i class="bi bi-person-lines-fill me-2"></i> Profile
+                                    </a>
+                                {% else %}
+                                    <a class="dropdown-item text-light nav-dropdown-hover"
+                                    href="{% url 'student_profile' %}">
+                                        <i class="bi bi-person-lines-fill me-2"></i> Profile
+                                    </a>
+                                {% endif %}
                             </li>
+
 
                             <li>
                                 <a class="dropdown-item text-danger nav-dropdown-hover" href="/logout/">
