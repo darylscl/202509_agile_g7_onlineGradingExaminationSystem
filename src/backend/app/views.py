@@ -134,18 +134,10 @@ def student_register(request):
         }
 
 
-        context = {
-            "full_name": full_name,
-            "email": email,
-            "matric": matric,
-            "contact": contact,
-        }
-
         if not full_name or not email or not matric or not password:
             messages.error(request, "All required fields must be filled.")
             return render(request, "app/student/register.html", context)
 
-            return render(request, "app/student/register.html", context)
 
         try:
             validate_email(email)
@@ -153,32 +145,27 @@ def student_register(request):
             messages.error(request, "Invalid email format.")
             return render(request, "app/student/register.html", context)
 
-            return render(request, "app/student/register.html", context)
 
         if password != confirm:
             messages.error(request, "Passwords do not match.")
             return render(request, "app/student/register.html", context)
 
-            return render(request, "app/student/register.html", context)
 
         if Student.objects.filter(student_email=email).exists():
             messages.error(request, "Email is already registered.")
             return render(request, "app/student/register.html", context)
 
-            return render(request, "app/student/register.html", context)
 
         if Student.objects.filter(matric_number=matric).exists():
             messages.error(request, "Matric number already existed.")
             return render(request, "app/student/register.html", context)
 
-            return render(request, "app/student/register.html", context)
 
         Student.objects.create(
             full_name=full_name,
             student_email=email,
             matric_number=matric,
             contact_number=contact,
-            password=make_password(password),
             password=make_password(password),
         )
 
