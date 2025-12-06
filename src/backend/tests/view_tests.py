@@ -884,3 +884,71 @@ def test_instructor_can_view_and_update_profile(client):
     assert instructor.instructor_email == "instructor_updated@example.com"
     assert instructor.contact_number == "0222222222"
     assert instructor.department == "Information Technology"
+
+
+@pytest.mark.django_db
+def test_student_profile_rejects_invalid_email(client):
+    student = Student.objects.create(
+        full_name="Test Student",
+        student_email="student1@example.com",
+        matric_number="1234567890",
+        contact_number="0123456789",
+        password="pw",
+    )
+
+    session = client.session
+    session["user_type"] = "student"
+    session["user_id"] = student.student_ID
+    session.save()
+
+    url = reverse("student_profile")
+
+    data = {
+        "full_name": "New Name",
+        "student_email": "not-an-email",  
+        "matric_number": "1234567890",
+        "contact_number": "000",
+    }
+
+    response = client.post(url, data=data)
+
+    assert response.status_code == 200
+
+    student.refresh_from_db()
+    # Nothing changed because email invalid
+    assert student.full_name == "Test Student"
+    assert student.student_email == "student1@example.com"
+
+
+@pytest.mark.django_db
+def test_instructor_profile_rejects_invalid_email(client):
+    instructor = Instructor.objects.create(
+        full_name="Test Instructor",
+        instructor_email="instructor1@example.com",
+        contact_number="0112345678",
+        department="CS",
+        password="pw",
+    )
+
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+    url = reverse("instructor_profile")
+
+    data = {
+        "full_name": "Updated",
+        "instructor_email": "bad-email",  # invalid
+        "contact_number": "000",
+        "department": "IT",
+    }
+
+    response = client.post(url, data=data)
+
+    assert response.status_code == 200
+
+    instructor.refresh_from_db()
+    assert instructor.instructor_email == "instructor1@example.com"
+
+
