@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}My Profile{% endblock %}
+
+{% block content %}
+<div class="container mt-0">
+    {% if messages %}
+        <div class="mb-0">
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h2 class="fw-bold mb-1">Instructor Profile</h2>
+            <p class="text-muted mb-0">
+                ID: <strong>{{ instructor.instructor_ID }}</strong> • Role: Instructor
+            </p>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <form method="post" id="instructorProfileForm">
+                {% csrf_token %}
+
+                <div class="mb-3">
+                    <label class="form-label">Full Name</label>
+                    <input type="text" name="full_name" class="form-control"
+                           value="{{ instructor.full_name }}" disabled>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="instructor_email" class="form-control"
+                           value="{{ instructor.instructor_email }}" disabled>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Contact Number</label>
+                    <input type="text" name="contact_number" class="form-control"
+                           value="{{ instructor.contact_number }}" disabled>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Department</label>
+                    <input type="text" name="department" class="form-control"
+                           value="{{ instructor.department }}" disabled>
+                </div>
+
+                <div class="d-flex justify-content-end">
+                    <button type="button" id="editInstructorBtn" class="btn btn-outline-primary me-2">
+                        Edit Profile
+                    </button>
+                    <button type="submit" id="saveInstructorBtn" class="btn btn-primary d-none">
+                        Save Changes
+                    </button>
+                    <button type="button" id="cancelInstructorBtn" class="btn btn-secondary d-none">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const form = document.getElementById("instructorProfileForm");
+    if (!form) return;
+
+    const inputs = form.querySelectorAll("input");
+    const editBtn = document.getElementById("editInstructorBtn");
+    const saveBtn = document.getElementById("saveInstructorBtn");
+    const cancelBtn = document.getElementById("cancelInstructorBtn");
+
+    const originalValues = {};
+    inputs.forEach(input => {
+        originalValues[input.name] = input.value;
+    });
+
+    editBtn.addEventListener("click", function () {
+        inputs.forEach(i => i.disabled = false);
+        editBtn.classList.add("d-none");
+        saveBtn.classList.remove("d-none");
+        cancelBtn.classList.remove("d-none");
+    });
+
+    cancelBtn.addEventListener("click", function () {
+        inputs.forEach(i => {
+            i.value = originalValues[i.name];
+            i.disabled = true;
+        });
+        saveBtn.classList.add("d-none");
+        cancelBtn.classList.add("d-none");
+        editBtn.classList.remove("d-none");
+    });
+});
+</script>
+{% endblock %}
