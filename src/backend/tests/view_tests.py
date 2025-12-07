@@ -10,6 +10,92 @@ from django.core.validators import validate_email
 
 # User Module test
 @pytest.mark.django_db
+def test_email_validation_missing_at_symbol(client):
+    data = {
+        "full_name": "John Doe",
+        "email": "johnexample.com",
+        "matric_number": "PPE0001",
+        "password": "pass1234",
+        "confirm_password": "pass1234",
+    }
+    response = client.post(reverse("student_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+    assert "Invalid email format." in str(messages[0])
+    
+@pytest.mark.django_db
+def test_email_validation_missing_domain(client):
+    data = {
+        "full_name": "John Doe",
+        "email": "john@",
+        "matric_number": "PPE0001",
+        "password": "pass1234",
+        "confirm_password": "pass1234",
+    }
+    response = client.post(reverse("student_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+    assert "Invalid email format." in str(messages[0])
+    
+
+
+@pytest.mark.django_db
+def test_student_matric_invalid_format(client):
+    data = {
+        "full_name": "John",
+        "email": "john@example.com",
+        "matric_number": "ABC1234",
+        "password": "pass1234",
+        "confirm_password": "pass1234",
+    }
+    response = client.post(reverse("student_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+    assert "Matric number must follow the format PPE0000" in str(messages[0])
+    
+@pytest.mark.django_db
+def test_contact_number_invalid(client):
+    data = {
+        "full_name": "John Doe",
+        "email": "john@example.com",
+        "matric_number": "PPE0001",
+        "contact_number": "ABC123",
+        "password": "pass1234",
+        "confirm_password": "pass1234",
+    }
+
+    response = client.post(reverse("student_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+
+    assert "Contact number must contain only digits" in str(messages[0])
+    
+
+@pytest.mark.django_db
+def test_password_too_short(client):
+    data = {
+        "full_name": "John",
+        "email": "john@example.com",
+        "matric_number": "PPE0001",
+        "password": "123",
+        "confirm_password": "123",
+    }
+
+    response = client.post(reverse("student_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+    assert "Password must be at least 8 characters." in str(messages[0])
+    
+@pytest.mark.django_db
+def test_password_must_contain_letters_and_numbers(client):
+    data = {
+        "full_name": "John",
+        "email": "john@example.com",
+        "matric_number": "PPE0001",
+        "password": "password",
+        "confirm_password": "password",
+    }
+    response = client.post(reverse("student_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+    assert "Password must contain both letters and numbers." in str(messages[0])
+    
+
+@pytest.mark.django_db
 def test_student_register_success(client):
     data = {
         "full_name": "John Doe",
@@ -185,6 +271,91 @@ def test_instructor_register_invalid_email(client):
 
     messages = list(get_messages(response.wsgi_request))
     assert "Invalid email format." in str(messages[0])
+    
+@pytest.mark.django_db
+def test_instructor_invalid_email_missing_at_symbol(client):
+    data = {
+        "full_name": "Alan",
+        "email": "alanexample.com",   
+        "contact_number": "0122222222",
+        "password": "pass1234",
+        "confirm_password": "pass1234",
+    }
+
+    response = client.post(reverse("instructor_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+    assert "Invalid email format." in str(messages[0])
+    
+@pytest.mark.django_db
+def test_instructor_invalid_email_missing_domain(client):
+    data = {
+        "full_name": "Alan",
+        "email": "alan@",   
+        "contact_number": "0122222222",
+        "password": "pass1234",
+        "confirm_password": "pass1234",
+    }
+
+    response = client.post(reverse("instructor_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+    assert "Invalid email format." in str(messages[0])
+
+@pytest.mark.django_db
+def test_instructor_invalid_contact_non_digit(client):
+    data = {
+        "full_name": "Alan",
+        "email": "alan@example.com",
+        "contact_number": "abcd1234",  
+        "password": "pass1234",
+        "confirm_password": "pass1234",
+    }
+
+    response = client.post(reverse("instructor_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+    assert "Contact number must contain only digits" in str(messages[0])
+    
+@pytest.mark.django_db
+def test_instructor_invalid_contact_length(client):
+    data = {
+        "full_name": "Alan",
+        "email": "alan@example.com",
+        "contact_number": "0123",
+        "password": "pass1234",
+        "confirm_password": "pass1234",
+    }
+
+    response = client.post(reverse("instructor_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+    assert "Contact number must be 10–11 digits." in str(messages[0])
+    
+@pytest.mark.django_db
+def test_instructor_password_too_short(client):
+    data = {
+        "full_name": "Alan",
+        "email": "alan@example.com",
+        "password": "123",
+        "confirm_password": "123",
+    }
+
+    response = client.post(reverse("instructor_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+    assert "Password must be at least 8 characters." in str(messages[0])
+
+@pytest.mark.django_db
+def test_instructor_password_requires_letters_and_numbers(client):
+    data = {
+        "full_name": "Alan",
+        "email": "alan@example.com",
+        "password": "password",  
+        "confirm_password": "password",
+    }
+
+    response = client.post(reverse("instructor_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+    assert "Password must contain both letters and numbers." in str(messages[0])
+
+
+
 
 @pytest.mark.django_db
 def test_instructor_register_password_mismatch(client):
