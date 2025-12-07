@@ -9,6 +9,12 @@ from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.shortcuts import get_object_or_404
 from django.contrib import messages
+import re
+
+EMAIL_REGEX = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
+PASSWORD_REGEX = r"^(?=.*[A-Za-z])(?=.*\d).{8,}$"
+CONTACT_REGEX = r"^\d{10,11}$"
+MATRIC_REGEX = r"^PPE\d{4}$"
 
 
 
@@ -133,34 +139,62 @@ def student_register(request):
             "contact": contact,
         }
 
-
+        # Required fields
         if not full_name or not email or not matric or not password:
             messages.error(request, "All required fields must be filled.")
             return render(request, "app/student/register.html", context)
 
+        # Name length
+        if len(full_name) < 3:
+            messages.error(request, "Full name must be at least 3 characters.")
+            return render(request, "app/student/register.html", context)
 
-        try:
-            validate_email(email)
-        except ValidationError:
+        # Email format
+        if not re.match(EMAIL_REGEX, email):
             messages.error(request, "Invalid email format.")
             return render(request, "app/student/register.html", context)
 
-
-        if password != confirm:
-            messages.error(request, "Passwords do not match.")
+        # Matric format
+        if not re.match(MATRIC_REGEX, matric):
+            messages.error(request, "Matric number must follow the format PPE0000 (e.g., PPE1234).")
             return render(request, "app/student/register.html", context)
 
+        # Contact: digits only
+        if contact and not contact.isdigit():
+            messages.error(request, "Contact number must contain only digits.")
+            return render(request, "app/student/register.html", context)
 
+        # Contact: length
+        if contact and not (10 <= len(contact) <= 11):
+            messages.error(request, "Contact number must be 10–11 digits.")
+            return render(request, "app/student/register.html", context)
+
+        # ❗ DUPLICATE EMAIL CHECK — move BEFORE password validation
         if Student.objects.filter(student_email=email).exists():
             messages.error(request, "Email is already registered.")
             return render(request, "app/student/register.html", context)
 
-
+        # ❗ DUPLICATE MATRIC MUST ALSO COME BEFORE PASSWORD
         if Student.objects.filter(matric_number=matric).exists():
             messages.error(request, "Matric number already existed.")
             return render(request, "app/student/register.html", context)
 
+        # Password mismatch
+        if password != confirm:
+            messages.error(request, "Passwords do not match.")
+            return render(request, "app/student/register.html", context)
 
+        # Password too short
+        if len(password) < 8:
+            messages.error(request, "Password must be at least 8 characters.")
+            return render(request, "app/student/register.html", context)
+
+        # Password must contain letters + numbers
+        if password.isalpha() or password.isdigit():
+            messages.error(request, "Password must contain both letters and numbers.")
+            return render(request, "app/student/register.html", context)
+
+        # Create student
         Student.objects.create(
             full_name=full_name,
             student_email=email,
@@ -169,12 +203,11 @@ def student_register(request):
             password=make_password(password),
         )
 
-
         messages.success(request, "Registration successful. Please log in.")
         return redirect("universal_login")
 
-
     return render(request, "app/student/register.html")
+
 
 
 #profile page@student_required
@@ -276,24 +309,52 @@ def instructor_register(request):
             "department": department,
         }
 
+        # Required fields
         if not full_name or not email or not password:
             messages.error(request, "All required fields must be filled.")
             return render(request, "app/instructor/register.html", context)
 
-        try:
-            validate_email(email)
-        except ValidationError:
+        # Name length
+        if len(full_name) < 3:
+            messages.error(request, "Full name must be at least 3 characters.")
+            return render(request, "app/instructor/register.html", context)
+
+        # Email format
+        if not re.match(EMAIL_REGEX, email):
             messages.error(request, "Invalid email format.")
             return render(request, "app/instructor/register.html", context)
 
-        if password != confirm:
-            messages.error(request, "Passwords do not match.")
+        # Contact: digits only
+        if contact and not contact.isdigit():
+            messages.error(request, "Contact number must contain only digits.")
             return render(request, "app/instructor/register.html", context)
 
+        # Contact: length 10–11
+        if contact and not (10 <= len(contact) <= 11):
+            messages.error(request, "Contact number must be 10–11 digits.")
+            return render(request, "app/instructor/register.html", context)
+
+        # 🔹 MOVE UNIQUE EMAIL CHECK UP HERE (before password checks)
         if Instructor.objects.filter(instructor_email=email).exists():
             messages.error(request, "Email already registered.")
             return render(request, "app/instructor/register.html", context)
 
+        # Password mismatch FIRST
+        if password != confirm:
+            messages.error(request, "Passwords do not match.")
+            return render(request, "app/instructor/register.html", context)
+
+        # Password too short
+        if len(password) < 8:
+            messages.error(request, "Password must be at least 8 characters.")
+            return render(request, "app/instructor/register.html", context)
+
+        # Password must contain both letters & numbers
+        if password.isalpha() or password.isdigit():
+            messages.error(request, "Password must contain both letters and numbers.")
+            return render(request, "app/instructor/register.html", context)
+
+        # Create instructor
         Instructor.objects.create(
             full_name=full_name,
             instructor_email=email,
@@ -306,6 +367,8 @@ def instructor_register(request):
         return redirect("universal_login")
 
     return render(request, "app/instructor/register.html")
+
+
 
 # Exam Module Viewset
 def available_exams(request):
