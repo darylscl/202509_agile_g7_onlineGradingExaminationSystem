@@ -43,14 +43,14 @@
                     <p class="mb-1">
                         <strong>Start Time:</strong>
                         <span class="text-primary">
-                            {{ exam.start_time|date:"d M Y, H:i" }}
+                            {{ exam.start_time|timezone:"Asia/Kuala_Lumpur"|date:"Y-m-d H:i" }}
                         </span>
                     </p>
 
                     <p class="mb-0">
                         <strong>End Time:</strong>
                         <span class="text-danger">
-                            {{ exam.end_time|date:"d M Y, H:i" }}
+                            {{ exam.end_time|timezone:"Asia/Kuala_Lumpur"|date:"Y-m-d H:i" }}
                         </span>
                     </p>
                 </div>
