@@ -142,6 +142,7 @@ def student_register(request):
             "contact": contact,
         }
 
+        # Required fields
         if not full_name or not email or not matric or not password:
             messages.error(request, "All required fields must be filled.")
             return render(request, "app/student/register.html", context)
@@ -171,10 +172,12 @@ def student_register(request):
             messages.error(request, "Contact number must be 10–11 digits.")
             return render(request, "app/student/register.html", context)
 
+        # ❗ DUPLICATE EMAIL CHECK — move BEFORE password validation
         if Student.objects.filter(student_email=email).exists():
             messages.error(request, "Email is already registered.")
             return render(request, "app/student/register.html", context)
 
+        # ❗ DUPLICATE MATRIC MUST ALSO COME BEFORE PASSWORD
         if Student.objects.filter(matric_number=matric).exists():
             messages.error(request, "Matric number already existed.")
             return render(request, "app/student/register.html", context)
@@ -301,6 +304,7 @@ def instructor_register(request):
             "department": department,
         }
 
+        # Required fields
         if not full_name or not email or not password:
             messages.error(request, "All required fields must be filled.")
             return render(request, "app/instructor/register.html", context)
@@ -326,6 +330,7 @@ def instructor_register(request):
             messages.error(request, "Contact number must be 10–11 digits.")
             return render(request, "app/instructor/register.html", context)
 
+        # 🔹 MOVE UNIQUE EMAIL CHECK UP HERE (before password checks)
         if Instructor.objects.filter(instructor_email=email).exists():
             messages.error(request, "Email already registered.")
             return render(request, "app/instructor/register.html", context)
