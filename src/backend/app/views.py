@@ -14,6 +14,7 @@ from django.utils.dateparse import parse_datetime
 from django.db.models import Avg, Max, Count
 from zoneinfo import ZoneInfo
 from datetime import datetime
+import json
 
 EMAIL_REGEX = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
 PASSWORD_REGEX = r"^(?=.*[A-Za-z])(?=.*\d).{8,}$"
@@ -492,9 +493,35 @@ def available_exams(request):
 def exam_submissions(request, exam_id):
     exam = get_object_or_404(Exam, exam_id=exam_id)
     attempts = ExamAttempt.objects.filter(exam=exam, submitted_at__isnull=False).select_related('student').order_by('-submitted_at')
+
+    # Calculate total possible marks for the exam (sum of question marks)
+    total_possible = 0
+    qs = exam.questions.all()
+    for q in qs:
+        try:
+            total_possible += float(q.marks or 0)
+        except Exception:
+            continue
+
+    # Build attempts data with computed percentage to simplify template logic
+    attempts_data = []
+    for a in attempts:
+        pct = None
+        try:
+            if a.score is not None and total_possible and total_possible > 0:
+                pct = (float(a.score) / float(total_possible)) * 100
+        except Exception:
+            pct = None
+
+        attempts_data.append({
+            "attempt": a,
+            "percent": pct,
+        })
+
     return render(request, "app/instructor/exam_submissions.html", {
         "exam": exam,
-        "attempts": attempts,
+        "attempts_data": attempts_data,
+        "total_possible": total_possible,
     })
 
 def view_submission(request, attempt_id):
@@ -665,6 +692,198 @@ def exam_detail(request, exam_id):
     return render(request, "app/instructor/exam_detail.html", {
         "exam": exam, "questions": questions
     })
+
+
+@instructor_required
+def grade_distribution(request, exam_id):
+    instructor_id = request.session.get("user_id")
+    instructor = Instructor.objects.get(instructor_ID=instructor_id)
+    exam = get_object_or_404(Exam, exam_id=exam_id, created_by=instructor)
+
+    # Fetch submitted attempts with scores
+    attempts = ExamAttempt.objects.filter(exam=exam, submitted_at__isnull=False).values_list("score", flat=True)
+    scores = [s for s in attempts if s is not None]
+
+    # Prepare 10 buckets (0-9,10-19,...,90-100)
+    buckets = [0] * 10
+    for s in scores:
+        try:
+            val = float(s)
+        except Exception:
+            continue
+        idx = min(int(val) // 10, 9)
+        buckets[idx] += 1
+
+    labels = [
+        "0-9", "10-19", "20-29", "30-39", "40-49",
+        "50-59", "60-69", "70-79", "80-89", "90-100",
+    ]
+
+    avg = None
+    if scores:
+        avg = sum(scores) / len(scores)
+
+    context = {
+        "exam": exam,
+        "labels_json": json.dumps(labels),
+        "counts_json": json.dumps(buckets),
+        "total_submissions": len(scores),
+        "avg_score": avg,
+    }
+
+    return render(request, "app/instructor/grade_distribution.html", context)
+
+
+@instructor_required
+def student_history(request, student_id):
+    instructor_id = request.session.get("user_id")
+    instructor = Instructor.objects.get(instructor_ID=instructor_id)
+
+    student = get_object_or_404(Student, student_ID=student_id)
+
+    # Only include attempts for exams created by this instructor
+    attempts_qs = (
+        ExamAttempt.objects
+        .filter(student=student, submitted_at__isnull=False, exam__created_by=instructor)
+        .select_related('exam')
+        .order_by('submitted_at')
+    )
+
+    # For charting and table: compute percent per attempt using exam total
+    attempts_list = []
+    chart_labels = []
+    chart_percents = []
+
+    for a in attempts_qs:
+        # compute total possible for this exam
+        total_possible = 0
+        for q in a.exam.questions.all():
+            try:
+                total_possible += float(q.marks or 0)
+            except Exception:
+                continue
+
+        percent = None
+        try:
+            if a.score is not None and total_possible > 0:
+                percent = (float(a.score) / float(total_possible)) * 100
+        except Exception:
+            percent = None
+
+        attempts_list.append({
+            'attempt': a,
+            'total_possible': total_possible,
+            'percent': percent,
+        })
+
+        # label uses exam title and date
+        label = f"{a.exam.title} ({a.submitted_at.date() if a.submitted_at else ''})"
+        chart_labels.append(label)
+        chart_percents.append(percent if percent is not None else 0)
+
+    context = {
+        'student': student,
+        'attempts_list': attempts_list,
+        'chart_labels_json': json.dumps(chart_labels),
+        'chart_percents_json': json.dumps(chart_percents),
+    }
+
+    return render(request, 'app/instructor/student_history.html', context)
+
+
+@instructor_required
+def instructor_results(request):
+    """
+    Instructor results dashboard where instructor can pick an exam or a student.
+    Query params: ?exam_id=EX-001 or ?student_id=STU001
+    """
+    instructor_id = request.session.get("user_id")
+    instructor = Instructor.objects.get(instructor_ID=instructor_id)
+
+    exams = Exam.objects.filter(created_by=instructor).order_by('-start_time')
+
+    # students who have attempts for this instructor's exams
+    student_qs = Student.objects.filter(examattempt__exam__created_by=instructor).distinct()
+
+    selected_exam_id = request.GET.get('exam_id')
+    selected_student_id = request.GET.get('student_id')
+
+    chart = None
+    table_attempts = None
+
+    # If exam selected -> show distribution (reuse grade_distribution logic)
+    if selected_exam_id:
+        exam = get_object_or_404(Exam, exam_id=selected_exam_id, created_by=instructor)
+        attempts = ExamAttempt.objects.filter(exam=exam, submitted_at__isnull=False).values_list('score', flat=True)
+        scores = [s for s in attempts if s is not None]
+
+        buckets = [0] * 10
+        for s in scores:
+            try:
+                val = float(s)
+            except Exception:
+                continue
+            idx = min(int(val) // 10, 9)
+            buckets[idx] += 1
+
+        labels = [
+            "0-9","10-19","20-29","30-39","40-49",
+            "50-59","60-69","70-79","80-89","90-100",
+        ]
+
+        chart = {
+            'type': 'bar',
+            'labels': labels,
+            'data': buckets,
+            'title': f"Distribution — {exam.title}",
+        }
+
+        table_attempts = ExamAttempt.objects.filter(exam=exam, submitted_at__isnull=False).select_related('student').order_by('-submitted_at')
+
+    # If student selected -> show student's attempts across this instructor's exams
+    if selected_student_id:
+        student = get_object_or_404(Student, student_ID=selected_student_id)
+        attempts_qs = (
+            ExamAttempt.objects
+            .filter(student=student, submitted_at__isnull=False, exam__created_by=instructor)
+            .select_related('exam')
+            .order_by('submitted_at')
+        )
+
+        labels = []
+        percents = []
+        rows = []
+        for a in attempts_qs:
+            total_possible = sum((float(q.marks or 0) for q in a.exam.questions.all()))
+            pct = None
+            if a.score is not None and total_possible > 0:
+                try:
+                    pct = (float(a.score) / float(total_possible)) * 100
+                except Exception:
+                    pct = None
+            labels.append(f"{a.exam.exam_id} - {a.exam.title}")
+            percents.append(pct if pct is not None else 0)
+            rows.append({'attempt': a, 'total_possible': total_possible, 'percent': pct})
+
+        chart = {
+            'type': 'line',
+            'labels': labels,
+            'data': percents,
+            'title': f"Performance — {student.full_name}",
+        }
+
+        table_attempts = rows
+
+    context = {
+        'exams': exams,
+        'students': student_qs,
+        'chart_json': json.dumps(chart) if chart else None,
+        'table_attempts': table_attempts,
+        'selected_exam_id': selected_exam_id,
+        'selected_student_id': selected_student_id,
+    }
+
+    return render(request, 'app/instructor/instructor_results.html', context)
 
 
 def exam_update(request, exam_id):
