@@ -7,22 +7,29 @@
 <div class="exam-bg py-5">
     <div class="container">
 
-        <!-- Header -->
         <h2 class="fw-bold text-white text-center mb-4">
             Edit Exam — {{ exam.exam_id }}
         </h2>
 
-        <!-- Form Card -->
         <div class="card p-5 shadow-lg border-0 rounded-4 mx-auto"
             style="max-width: 900px; backdrop-filter: blur(4px);">
+
+            {% if messages %}
+            <div class="mb-3 text-center">
+                {% for message in messages %}
+                <div class="alert-message {{ message.tags }}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
 
             <form method="POST">
                 {% csrf_token %}
 
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Title</label>
-                    <input type="text" name="title" class="form-control form-control-lg" value="{{ exam.title }}"
-                        required>
+                    <input type="text" name="title" class="form-control form-control-lg" value="{{ exam.title }}">
                 </div>
 
                 <div class="mb-3">
@@ -32,32 +39,43 @@
 
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label class="form-label fw-semibold">Start Time</label>
-                        <input type="datetime-local" name="start_time" class="form-control"
-                            value="{{ exam.start_time|date:'Y-m-d\\TH:i' }}" required>
+                        <label class="form-label fw-semibold">Start Date</label>
+                        <input type="date" name="start_date" class="form-control"
+                            value="{{ exam.start_time|date:'Y-m-d' }}" required>
                     </div>
-
                     <div class="col-md-6 mb-3">
-                        <label class="form-label fw-semibold">End Time</label>
-                        <input type="datetime-local" name="end_time" class="form-control"
-                            value="{{ exam.end_time|date:'Y-m-d\\TH:i' }}" required>
+                        <label class="form-label fw-semibold">Start Time</label>
+                        <input type="time" name="start_time" class="form-control"
+                            value="{{ exam.start_time|date:'H:i' }}" required>
                     </div>
                 </div>
 
-                <!-- Buttons -->
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-semibold">End Date</label>
+                        <input type="date" name="end_date" class="form-control" value="{{ exam.end_time|date:'Y-m-d' }}"
+                            required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-semibold">End Time</label>
+                        <input type="time" name="end_time" class="form-control" value="{{ exam.end_time|date:'H:i' }}"
+                            required>
+                    </div>
+                </div>
+
                 <div class="d-flex justify-content-between mt-4">
                     <button type="submit" class="btn btn-success btn-lg px-5">
                         Save Changes
                     </button>
 
-                    <a href="{% url 'instructor_exam_detail' exam.exam_id %}" class="btn btn-outline-danger btn-lg px-4">
+                    <a href="{% url 'instructor_exam_detail' exam.exam_id %}"
+                        class="btn btn-outline-danger btn-lg px-5">
                         Cancel
                     </a>
                 </div>
+
             </form>
-
         </div>
-
     </div>
 </div>
 
@@ -100,6 +118,59 @@
 
     .btn-outline-light:hover {
         background: #ffffff25;
+    }
+
+    .alert-message {
+        padding: 10px 15px;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        display: inline-block;
+        max-width: 100%;
+        text-align: center;
+        margin-bottom: 10px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+        animation: fadeSlide 0.4s ease-out;
+        font-weight: 500;
+    }
+
+    /* Error (red) */
+    .alert-message.error {
+        background: #ffebee;
+        color: #c62828;
+        border: 1px solid #e57373;
+    }
+
+    /* Success (green) */
+    .alert-message.success {
+        background: #e8f5e9;
+        color: #2e7d32;
+        border: 1px solid #81c784;
+    }
+
+    /* Warning (yellow) */
+    .alert-message.warning {
+        background: #fff8e1;
+        color: #f9a825;
+        border: 1px solid #ffe082;
+    }
+
+    /* Info (blue) */
+    .alert-message.info {
+        background: #e3f2fd;
+        color: #1565c0;
+        border: 1px solid #64b5f6;
+    }
+
+    @keyframes fadeSlide {
+        from {
+            opacity: 0;
+            transform: translateY(-6px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 </style>
 

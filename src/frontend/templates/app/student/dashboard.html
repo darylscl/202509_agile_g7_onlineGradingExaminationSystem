@@ -1,14 +1,53 @@
 {% extends "base.html" %}
 {% block title %}Student Dashboard{% endblock %}
+
 {% block content %}
-<div class="py-4">
-    <h2 class="fw-bold mb-4">Student Dashboard</h2>
+
+<style>
+    .student-hero {
+        background: linear-gradient(135deg, #1b2735, #2c3e50);
+        padding: 40px 30px;
+        border-radius: 20px;
+        color: white;
+    }
+
+    .dash-card {
+        transition: transform .2s ease, box-shadow .2s ease;
+        border-radius: 18px;
+        cursor: pointer;
+    }
+
+    .dash-card:hover {
+        transform: translateY(-6px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+
+    .icon-bubble {
+        width: 45px;
+        height: 45px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        font-size: 20px;
+    }
+</style>
+
+<div class="py-4 container">
+
+    <div class="student-hero mb-5">
+        <h2 class="fw-bold mb-1">🎓 Student Dashboard</h2>
+        <p class="opacity-75 mb-0">Access your exams and track your performance.</p>
+    </div>
 
     <div class="row g-4">
         <div class="col-md-6">
             <a class="text-decoration-none" href="/student/exams/available">
-                <div class="card shadow-sm p-4 rounded-4 border-0">
-                    <h4><i class="bi bi-pencil-square me-2 text-primary"></i>Available Exams</h4>
+                <div class="card dash-card shadow-sm p-4 border-0 h-100">
+                    <div class="icon-bubble bg-primary bg-opacity-10 text-primary mb-3">
+                        <i class="bi bi-pencil-square"></i>
+                    </div>
+                    <h4 class="fw-bold mb-1">Available Exams</h4>
                     <p class="text-muted">See the exams you can take.</p>
                 </div>
             </a>
@@ -16,12 +55,17 @@
 
         <div class="col-md-6">
             <a class="text-decoration-none" href="/student/results/">
-                <div class="card shadow-sm p-4 rounded-4 border-0">
-                    <h4><i class="bi bi-bar-chart-line-fill me-2 text-success"></i>My Results</h4>
-                    <p class="text-muted">View your exam submissions.</p>
+                <div class="card dash-card shadow-sm p-4 border-0 h-100">
+                    <div class="icon-bubble bg-success bg-opacity-10 text-success mb-3">
+                        <i class="bi bi-bar-chart-line-fill"></i>
+                    </div>
+                    <h4 class="fw-bold mb-1">My Results</h4>
+                    <p class="text-muted">View your exam submissions and scores.</p>
                 </div>
             </a>
         </div>
+
     </div>
 </div>
+
 {% endblock %}
