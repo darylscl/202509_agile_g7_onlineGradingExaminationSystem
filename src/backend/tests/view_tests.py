@@ -1167,7 +1167,8 @@ def test_exam_update_missing_fields(client):
 
     assert response.status_code == 200  
     messages = list(get_messages(response.wsgi_request))
-    assert "All fields (title, start time, end time) are required." in str(messages[0])
+    assert "All fields (title, start date/time, end date/time) are required." in str(messages[0])
+
     
 @pytest.mark.django_db
 def test_exam_update_invalid_datetime(client):
