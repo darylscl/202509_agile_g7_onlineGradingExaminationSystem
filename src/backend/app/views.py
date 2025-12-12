@@ -10,12 +10,15 @@ from django.core.validators import validate_email
 from django.shortcuts import get_object_or_404
 from django.contrib import messages
 import re
+from django.utils.dateparse import parse_datetime
 
 EMAIL_REGEX = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
 PASSWORD_REGEX = r"^(?=.*[A-Za-z])(?=.*\d).{8,}$"
 CONTACT_REGEX = r"^\d{10,11}$"
 MATRIC_REGEX = r"^PPE\d{4}$"
 
+#todo list:
+# Update marks not able to save error
 
 
 #Session login
@@ -143,28 +146,28 @@ def student_register(request):
         if not full_name or not email or not matric or not password:
             messages.error(request, "All required fields must be filled.")
             return render(request, "app/student/register.html", context)
+        
+        if not re.search(r"[A-Za-z]", full_name):
+            messages.error(request, "Full name must contain at least one letter.")
+            return render(request, "app/student/register.html", context)
 
-        # Name length
+
         if len(full_name) < 3:
             messages.error(request, "Full name must be at least 3 characters.")
             return render(request, "app/student/register.html", context)
 
-        # Email format
         if not re.match(EMAIL_REGEX, email):
             messages.error(request, "Invalid email format.")
             return render(request, "app/student/register.html", context)
 
-        # Matric format
         if not re.match(MATRIC_REGEX, matric):
             messages.error(request, "Matric number must follow the format PPE0000 (e.g., PPE1234).")
             return render(request, "app/student/register.html", context)
 
-        # Contact: digits only
         if contact and not contact.isdigit():
             messages.error(request, "Contact number must contain only digits.")
             return render(request, "app/student/register.html", context)
 
-        # Contact: length
         if contact and not (10 <= len(contact) <= 11):
             messages.error(request, "Contact number must be 10–11 digits.")
             return render(request, "app/student/register.html", context)
@@ -179,22 +182,18 @@ def student_register(request):
             messages.error(request, "Matric number already existed.")
             return render(request, "app/student/register.html", context)
 
-        # Password mismatch
         if password != confirm:
             messages.error(request, "Passwords do not match.")
             return render(request, "app/student/register.html", context)
 
-        # Password too short
         if len(password) < 8:
             messages.error(request, "Password must be at least 8 characters.")
             return render(request, "app/student/register.html", context)
 
-        # Password must contain letters + numbers
         if password.isalpha() or password.isdigit():
             messages.error(request, "Password must contain both letters and numbers.")
             return render(request, "app/student/register.html", context)
 
-        # Create student
         Student.objects.create(
             full_name=full_name,
             student_email=email,
@@ -210,7 +209,6 @@ def student_register(request):
 
 
 
-#profile page@student_required
 def student_profile(request):
     student_id = request.session.get("user_id")
     student = get_object_or_404(Student, student_ID=student_id)
@@ -232,7 +230,6 @@ def student_profile(request):
             messages.error(request, "Invalid email format.")
             return render(request, "app/student/profile.html", {"student": student})
 
-        # prevent duplicate email/matric on other students
         if Student.objects.filter(student_email=email).exclude(student_ID=student.student_ID).exists():
             messages.error(request, "This email is already used by another student.")
             return render(request, "app/student/profile.html", {"student": student})
@@ -241,7 +238,6 @@ def student_profile(request):
             messages.error(request, "This matric number is already used by another student.")
             return render(request, "app/student/profile.html", {"student": student})
 
-        # update and save
         student.full_name = full_name
         student.student_email = email
         student.matric_number = matric
@@ -249,7 +245,6 @@ def student_profile(request):
         student.save()
 
         messages.success(request, "Profile updated successfully.")
-        # refresh object so template sees new values
         return redirect("student_profile")
 
     return render(request, "app/student/profile.html", {"student": student})
@@ -313,23 +308,24 @@ def instructor_register(request):
         if not full_name or not email or not password:
             messages.error(request, "All required fields must be filled.")
             return render(request, "app/instructor/register.html", context)
+        
+        if not re.search(r"[A-Za-z]", full_name):
+            messages.error(request, "Full name must contain at least one letter.")
+            return render(request, "app/instructor/register.html", context)
 
-        # Name length
+
         if len(full_name) < 3:
             messages.error(request, "Full name must be at least 3 characters.")
             return render(request, "app/instructor/register.html", context)
 
-        # Email format
         if not re.match(EMAIL_REGEX, email):
             messages.error(request, "Invalid email format.")
             return render(request, "app/instructor/register.html", context)
 
-        # Contact: digits only
         if contact and not contact.isdigit():
             messages.error(request, "Contact number must contain only digits.")
             return render(request, "app/instructor/register.html", context)
 
-        # Contact: length 10–11
         if contact and not (10 <= len(contact) <= 11):
             messages.error(request, "Contact number must be 10–11 digits.")
             return render(request, "app/instructor/register.html", context)
@@ -339,22 +335,18 @@ def instructor_register(request):
             messages.error(request, "Email already registered.")
             return render(request, "app/instructor/register.html", context)
 
-        # Password mismatch FIRST
         if password != confirm:
             messages.error(request, "Passwords do not match.")
             return render(request, "app/instructor/register.html", context)
 
-        # Password too short
         if len(password) < 8:
             messages.error(request, "Password must be at least 8 characters.")
             return render(request, "app/instructor/register.html", context)
 
-        # Password must contain both letters & numbers
         if password.isalpha() or password.isdigit():
             messages.error(request, "Password must contain both letters and numbers.")
             return render(request, "app/instructor/register.html", context)
 
-        # Create instructor
         Instructor.objects.create(
             full_name=full_name,
             instructor_email=email,
@@ -428,34 +420,98 @@ def exam_list(request):
 def exam_create(request):
     instructor_id = request.session.get("user_id")
     instructor = Instructor.objects.get(instructor_ID=instructor_id)
+
     exam = None
     exam_id = request.GET.get("exam_id")
 
     if exam_id:
         exam = Exam.objects.filter(exam_id=exam_id, created_by=instructor).first()
 
-    # CREATE EXAM
     if request.method == "POST" and "create_exam" in request.POST:
-        exam = Exam.objects.create(
-            title=request.POST.get("title"),
-            description=request.POST.get("description"),
-            start_time=request.POST.get("start_time"),
-            end_time=request.POST.get("end_time"),
-            created_by=instructor,
-        )
+        title = (request.POST.get("title") or "").strip()
+        description = request.POST.get("description") or ""
+        start_date = request.POST.get("start_date") or ""
+        start_time_part = request.POST.get("start_time") or ""
+        end_date = request.POST.get("end_date") or ""
+        end_time_part = request.POST.get("end_time") or ""
+        
+
+        if not title or not start_date or not start_time_part or not end_date or not end_time_part:
+            messages.error(
+                request,
+                "All fields (title, start time, end time) are required.",
+            )
+            return render(
+                request,
+                "app/instructor/exam_form.html",
+                {"exam": exam, "questions": exam.questions.all() if exam else []},
+            )
+            
+        start_raw = f"{start_date} {start_time_part}"
+        end_raw = f"{end_date} {end_time_part}"
+        start_time = parse_datetime(start_raw)
+        end_time = parse_datetime(end_raw)
+
+        if not start_time or not end_time:
+            messages.error(request, "Please enter a valid date and time.")
+            return render(
+                request,
+                "app/instructor/exam_form.html",
+                {"exam": exam, "questions": exam.questions.all() if exam else []},
+            )
+
+        if timezone.is_naive(start_time):
+            start_time = timezone.make_aware(start_time)
+        if timezone.is_naive(end_time):
+            end_time = timezone.make_aware(end_time)
+            
+        if end_time <= start_time:
+            messages.error(request, "End time must be after start time.")
+            return render(
+                request,
+                "app/instructor/exam_form.html",
+                {"exam": exam, "questions": exam.questions.all() if exam else []},
+            )
+            
+        now = timezone.now()
+        if start_time < now:
+            messages.error(request, "Start time cannot be earlier than the current date & time.")
+            return render(request, "app/instructor/exam_form.html",
+                          {"exam": exam, "questions": exam.questions.all() if exam else []})
+
+        try:
+            exam = Exam.objects.create(
+                title=title,
+                description=description,
+                start_time=start_time,
+                end_time=end_time,
+                created_by=instructor,
+            )
+        except ValidationError as e:
+            messages.error(request, e.messages[0])
+            return render(
+                request,
+                "app/instructor/exam_form.html",
+                {"exam": None, "questions": []},
+            )
+
         return redirect(f"/instructor/exams/create/?exam_id={exam.exam_id}")
 
-    # ADD QUESTION
     if request.method == "POST" and "add_question" in request.POST:
         exam = Exam.objects.get(exam_id=exam_id, created_by=instructor)
-
+        
+        marks = request.POST.get("marks", "1")
+        try:
+            marks = float(marks)
+        except:
+            marks = 1
         question = ExamQuestion.objects.create(
             exam=exam,
             question_text=request.POST.get("question_text"),
             question_type=request.POST.get("question_type"),
+            marks=marks,
         )
 
-        # MCQ Choices
         if question.question_type == "MCQ":
             choices = request.POST.getlist("choice_text")
             correct = request.POST.get("correct_choice")
@@ -470,9 +526,6 @@ def exam_create(request):
 
     questions = exam.questions.all() if exam else []
     return render(request, "app/instructor/exam_form.html", {"exam": exam, "questions": questions})
-
-
-
 
 def exam_detail(request, exam_id):
     instructor_id = request.session.get("user_id")
@@ -489,19 +542,51 @@ def exam_detail(request, exam_id):
 def exam_update(request, exam_id):
     instructor_id = request.session.get("user_id")
     instructor = Instructor.objects.get(instructor_ID=instructor_id)
-    user = instructor
-    exam = get_object_or_404(Exam, exam_id=exam_id, created_by=user)
+    exam = get_object_or_404(Exam, exam_id=exam_id, created_by=instructor)
 
     if request.method == "POST":
-        exam.title = request.POST.get("title", exam.title)
-        exam.description = request.POST.get("description", exam.description)
-        exam.start_time = request.POST.get("start_time", exam.start_time)
-        exam.end_time = request.POST.get("end_time", exam.end_time)
-        exam.save()
+        title = (request.POST.get("title") or "").strip()
+        description = request.POST.get("description") or ""
+
+        start_date = request.POST.get("start_date") or ""
+        start_time_part = request.POST.get("start_time") or ""
+        end_date = request.POST.get("end_date") or ""
+        end_time_part = request.POST.get("end_time") or ""
+
+        if not title or not start_date or not start_time_part or not end_date or not end_time_part:
+            messages.error(request, "All fields (title, start time, end time) are required.")
+            return render(request, "app/instructor/exam_edit.html", {"exam": exam})
+
+        start_raw = f"{start_date} {start_time_part}"
+        end_raw = f"{end_date} {end_time_part}"
+
+        start_time = parse_datetime(start_raw)
+        end_time = parse_datetime(end_raw)
+
+        if not start_time or not end_time:
+            messages.error(request, "Please enter a valid date and time.")
+            return render(request, "app/instructor/exam_edit.html", {"exam": exam})
+
+        if timezone.is_naive(start_time):
+            start_time = timezone.make_aware(start_time)
+        if timezone.is_naive(end_time):
+            end_time = timezone.make_aware(end_time)
+
+        exam.title = title
+        exam.description = description
+        exam.start_time = start_time
+        exam.end_time = end_time
+
+        try:
+            exam.full_clean()  
+            exam.save()
+        except ValidationError as e:
+            messages.error(request, e.messages[0])
+            return render(request, "app/instructor/exam_edit.html", {"exam": exam})
+
         return redirect("instructor_exam_detail", exam_id=exam.exam_id)
 
     return render(request, "app/instructor/exam_edit.html", {"exam": exam})
-
 
 
 
@@ -607,12 +692,37 @@ def question_delete(request, exam_id, question_id):
 def choice_add(request, question_id):
     question = get_object_or_404(ExamQuestion, id=question_id)
 
+    # 1️⃣ Only MCQ can have choices
+    if question.question_type != "MCQ":
+        messages.error(request, "Choices can only be added to MCQ questions.")
+        return redirect("instructor_exam_detail", exam_id=question.exam.exam_id)
+
     if request.method == "POST":
+        choice_text = request.POST.get("choice_text", "").strip()
+        is_correct = request.POST.get("is_correct") == "on"
+
+        if not choice_text:
+            messages.error(request, "Choice text cannot be empty.")
+            return render(request, "app/instructor/choice_form.html", {"question": question, "exam": question.exam,})
+
+        if question.choices.count() >= 4:
+            messages.error(request, "Maximum 4 choices allowed.")
+            return redirect("instructor_exam_detail", exam_id=question.exam.exam_id)
+
+        if question.choices.filter(choice_text__iexact=choice_text).exists():
+            messages.error(request, "Duplicate choices are not allowed.")
+            return redirect("instructor_exam_detail", exam_id=question.exam.exam_id)
+
+        if is_correct and question.choices.filter(is_correct=True).exists():
+            messages.error(request, "Only one correct answer is allowed.")
+            return redirect("instructor_exam_detail", exam_id=question.exam.exam_id)
+
         Choice.objects.create(
             choice_id=question,
-            choice_text=request.POST.get("choice_text"),
-            is_correct=bool(request.POST.get("is_correct")),
+            choice_text=choice_text,
+            is_correct=is_correct,
         )
+
         return redirect("instructor_exam_detail", exam_id=question.exam.exam_id)
 
     return render(request, "app/instructor/choice_form.html", {"question": question})
@@ -620,13 +730,44 @@ def choice_add(request, question_id):
 
 def choice_update(request, choice_id):
     choice = get_object_or_404(Choice, id=choice_id)
+    question = choice.choice_id
 
     if request.method == "POST":
-        choice.choice_text = request.POST.get("choice_text")
-        choice.is_correct = bool(request.POST.get("is_correct"))
+        choice_text = request.POST.get("choice_text", "").strip()
+        is_correct = request.POST.get("is_correct") == "on"
+
+        if not choice_text:
+            messages.error(request, "Choice text cannot be empty.")
+            return render(
+                request,
+                "app/instructor/choice_form.html",
+                {"choice": choice},
+            )
+
+        if question.choices.exclude(id=choice.id).filter(
+            choice_text__iexact=choice_text
+        ).exists():
+            messages.error(request, "Duplicate choices are not allowed.")
+            return redirect(
+                "instructor_exam_detail",
+                exam_id=question.exam.exam_id,
+            )
+
+        if is_correct and question.choices.exclude(id=choice.id).filter(is_correct=True).exists():
+            messages.error(request, "Only one correct answer is allowed.")
+            return redirect(
+                "instructor_exam_detail",
+                exam_id=question.exam.exam_id,
+            )
+
+        choice.choice_text = choice_text
+        choice.is_correct = is_correct
         choice.save()
 
-        return redirect("instructor_exam_detail", exam_id=choice.choice_id.exam.exam_id)
+        return redirect(
+            "instructor_exam_detail",
+            exam_id=question.exam.exam_id,
+        )
 
     return render(request, "app/instructor/choice_form.html", {"choice": choice})
 

@@ -96,6 +96,92 @@ def test_password_must_contain_letters_and_numbers(client):
     
 
 @pytest.mark.django_db
+def test_email_validation_missing_at_symbol(client):
+    data = {
+        "full_name": "John Doe",
+        "email": "johnexample.com",
+        "matric_number": "PPE0001",
+        "password": "pass1234",
+        "confirm_password": "pass1234",
+    }
+    response = client.post(reverse("student_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+    assert "Invalid email format." in str(messages[0])
+    
+@pytest.mark.django_db
+def test_email_validation_missing_domain(client):
+    data = {
+        "full_name": "John Doe",
+        "email": "john@",
+        "matric_number": "PPE0001",
+        "password": "pass1234",
+        "confirm_password": "pass1234",
+    }
+    response = client.post(reverse("student_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+    assert "Invalid email format." in str(messages[0])
+    
+
+
+@pytest.mark.django_db
+def test_student_matric_invalid_format(client):
+    data = {
+        "full_name": "John",
+        "email": "john@example.com",
+        "matric_number": "ABC1234",
+        "password": "pass1234",
+        "confirm_password": "pass1234",
+    }
+    response = client.post(reverse("student_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+    assert "Matric number must follow the format PPE0000" in str(messages[0])
+    
+@pytest.mark.django_db
+def test_contact_number_invalid(client):
+    data = {
+        "full_name": "John Doe",
+        "email": "john@example.com",
+        "matric_number": "PPE0001",
+        "contact_number": "ABC123",
+        "password": "pass1234",
+        "confirm_password": "pass1234",
+    }
+
+    response = client.post(reverse("student_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+
+    assert "Contact number must contain only digits" in str(messages[0])
+    
+
+@pytest.mark.django_db
+def test_password_too_short(client):
+    data = {
+        "full_name": "John",
+        "email": "john@example.com",
+        "matric_number": "PPE0001",
+        "password": "123",
+        "confirm_password": "123",
+    }
+
+    response = client.post(reverse("student_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+    assert "Password must be at least 8 characters." in str(messages[0])
+    
+@pytest.mark.django_db
+def test_password_must_contain_letters_and_numbers(client):
+    data = {
+        "full_name": "John",
+        "email": "john@example.com",
+        "matric_number": "PPE0001",
+        "password": "password",
+        "confirm_password": "password",
+    }
+    response = client.post(reverse("student_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+    assert "Password must contain both letters and numbers." in str(messages[0])
+    
+
+@pytest.mark.django_db
 def test_student_register_success(client):
     data = {
         "full_name": "John Doe",
@@ -217,6 +303,22 @@ def test_student_register_duplicate_matric(client):
 
     messages = list(get_messages(response.wsgi_request))
     assert "Matric number already existed." in str(messages[0])
+    
+@pytest.mark.django_db
+def test_student_register_name__reject_digits(client):
+    data = {
+        "full_name": "123456",
+        "email": "student@example.com",
+        "matric_number": "PPE1234",
+        "password": "pass1234",
+        "confirm_password": "pass1234",
+    }
+
+    response = client.post(reverse("student_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+
+    assert "Full name must contain at least one letter." in str(messages[0])
+
 
     
 @pytest.mark.django_db
@@ -271,6 +373,21 @@ def test_instructor_register_invalid_email(client):
 
     messages = list(get_messages(response.wsgi_request))
     assert "Invalid email format." in str(messages[0])
+    
+@pytest.mark.django_db
+def test_instructor_register_name_reject_digits(client):
+    data = {
+        "full_name": "987654",
+        "email": "inst@example.com",
+        "password": "pass1234",
+        "confirm_password": "pass1234",
+    }
+
+    response = client.post(reverse("instructor_register"), data)
+    messages = list(get_messages(response.wsgi_request))
+
+    assert "Full name must contain at least one letter." in str(messages[0])
+
     
 @pytest.mark.django_db
 def test_instructor_invalid_email_missing_at_symbol(client):
@@ -414,6 +531,101 @@ def test_exam_can_be_created_with_user():
 
     assert exam.exam_id.startswith("EX-")
     assert exam.title == "Sample Exam"
+
+    
+@pytest.mark.django_db
+def test_exam_create_missing_exam_title(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teach_missing@example.com",
+        password="pass",
+    )
+
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+    response = client.post(
+        "/instructor/exams/create/",
+        {
+            "create_exam": "1",
+            "title": "",                
+            "description": "Desc",
+            "start_time": "",          
+            "end_time": "",             
+        },
+    )
+
+    assert response.status_code == 200
+    assert Exam.objects.count() == 0
+
+    messages = list(get_messages(response.wsgi_request))
+    assert "All fields (title, start time, end time) are required." in str(messages[0])
+    
+
+@pytest.mark.django_db
+def test_exam_create_end_time_before_start_time(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass",
+    )
+
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+    response = client.post(
+        "/instructor/exams/create/",
+        {
+            "create_exam": "1",
+            "title": "Test Exam",
+            "description": "desc",
+            "start_date": "2025-11-20",
+            "start_time": "15:00",
+            "end_date": "2025-11-20",
+            "end_time": "14:00", 
+        },
+    )
+
+    messages_list = list(get_messages(response.wsgi_request))
+
+    assert response.status_code == 200
+    assert "End time must be after start time." in str(messages_list[0])
+
+    
+@pytest.mark.django_db
+def test_exam_create_invalid_datetime_format_rejected(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass",
+    )
+
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+    response = client.post(
+        "/instructor/exams/create/",
+        {
+            "create_exam": "1",
+            "title": "Invalid Date Test",
+            "description": "desc",
+            "start_date": "not-a-date",   
+            "start_time": "25:61",        
+            "end_date": "still-not-date", 
+            "end_time": "10:70",         
+        },
+    )
+
+    messages_list = list(get_messages(response.wsgi_request))
+
+    assert response.status_code == 200
+    assert "Please enter a valid date and time." in str(messages_list[0])
 
    
 # ID auto increment 
@@ -564,8 +776,65 @@ def test_exam_is_open_true():
 def test_exam_create_and_add_question(client):
     instructor = Instructor.objects.create(
         full_name="Teacher",
-        instructor_email="teach@example.com",
-        password="pass"
+        instructor_email="teacher@example.com",
+        password="pass",
+    )
+
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+    response = client.post(
+        "/instructor/exams/create/",
+        {
+            "create_exam": "1",
+            "title": "Sample Exam",
+            "description": "desc",
+            "start_date": "2030-10-10",
+            "start_time": "10:00",
+            "end_date": "2030-10-10",
+            "end_time": "11:00",
+        },
+    )
+
+    assert response.status_code == 302  # Redirect after creation
+
+    exam = Exam.objects.first()
+    assert exam is not None
+
+    response2 = client.post(
+        f"/instructor/exams/create/?exam_id={exam.exam_id}",
+        {
+            "add_question": "1",
+            "question_text": "What is 2+2?",
+            "question_type": "TEXT",
+        },
+    )
+
+    assert response2.status_code == 302  
+    assert exam.questions.count() == 1
+    assert exam.questions.first().marks == 1
+
+
+@pytest.mark.django_db
+def test_choice_adding_rejected_for_text_question(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass",
+    )
+
+    exam = Exam.objects.create(
+        title="Exam",
+        start_time=timezone.now(),
+        end_time=timezone.now() + timedelta(hours=1),
+        created_by=instructor,
+    )
+
+    question = ExamQuestion.objects.create(
+        exam=exam,
+        question_text="Explain something",
+        question_type="TEXT",
     )
 
     session = client.session
@@ -573,26 +842,165 @@ def test_exam_create_and_add_question(client):
     session["user_id"] = instructor.instructor_ID
     session.save()
 
-    response = client.post("/instructor/exams/create/", {
-        "create_exam": "1",
-        "title": "Exam",
-        "description": "Desc",
-        "start_time": "2025-11-20T12:00",
-        "end_time": "2025-11-20T13:00",
-    })
+    response = client.post(
+        reverse("instructor_choice_add", args=[question.id]),
+        {"choice_text": "Option A", "is_correct": "on"},
+    )
 
-    assert response.status_code == 302
-    exam = Exam.objects.first()
-    assert exam is not None
+    messages = list(get_messages(response.wsgi_request))
+    assert "Choices can only be added to MCQ questions." in str(messages[0])
 
-    response = client.post(f"/instructor/exams/create/?exam_id={exam.exam_id}", {
-        "add_question": "1",
-        "question_text": "Test Question",
-        "question_type": "TEXT"
-    })
 
-    assert exam.questions.count() == 1
 
+@pytest.mark.django_db
+def test_choice_add_duplicate_rejected(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass",
+    )
+
+    exam = Exam.objects.create(
+        title="Exam",
+        start_time=timezone.now(),
+        end_time=timezone.now() + timedelta(hours=1),
+        created_by=instructor,
+    )
+
+    q = ExamQuestion.objects.create(
+        exam=exam,
+        question_text="MCQ",
+        question_type="MCQ",
+    )
+
+    Choice.objects.create(choice_id=q, choice_text="A", is_correct=False)
+
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+    response = client.post(
+       reverse("instructor_choice_add", args=[q.id]),
+        {"choice_text": "A"},
+    )
+
+    messages = list(get_messages(response.wsgi_request))
+    assert "Duplicate choices are not allowed." in str(messages[0])
+
+
+@pytest.mark.django_db
+def test_choice_add_max_4_choices(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass",
+    )
+
+    exam = Exam.objects.create(
+        title="Exam",
+        start_time=timezone.now(),
+        end_time=timezone.now() + timedelta(hours=1),
+        created_by=instructor,
+    )
+
+    q = ExamQuestion.objects.create(
+        exam=exam,
+        question_text="MCQ",
+        question_type="MCQ",
+    )
+
+    for opt in ["A", "B", "C", "D"]:
+        Choice.objects.create(choice_id=q, choice_text=opt, is_correct=False)
+
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+    response = client.post(
+        reverse("instructor_choice_add", args=[q.id]),
+        {"choice_text": "E"},
+    )
+
+    messages = list(get_messages(response.wsgi_request))
+    assert "Maximum 4 choices allowed." in str(messages[0])
+    assert q.choices.count() == 4
+
+
+@pytest.mark.django_db
+def test_choice_add_multiple_correct_rejected(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass",
+    )
+
+    exam = Exam.objects.create(
+        title="Exam",
+        start_time=timezone.now(),
+        end_time=timezone.now() + timedelta(hours=1),
+        created_by=instructor,
+    )
+
+    q = ExamQuestion.objects.create(
+        exam=exam,
+        question_text="MCQ",
+        question_type="MCQ",
+    )
+
+    Choice.objects.create(choice_id=q, choice_text="A", is_correct=True)
+
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+    response = client.post(
+        reverse("instructor_choice_add", args=[q.id]),
+        {"choice_text": "B", "is_correct": "on"},
+    )
+
+    messages = list(get_messages(response.wsgi_request))
+    assert "Only one correct answer is allowed." in str(messages[0])
+
+
+@pytest.mark.django_db
+def test_choice_update_multiple_correct_rejected(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass",
+    )
+
+    exam = Exam.objects.create(
+        title="Exam",
+        start_time=timezone.now(),
+        end_time=timezone.now() + timedelta(hours=1),
+        created_by=instructor,
+    )
+
+    q = ExamQuestion.objects.create(
+        exam=exam,
+        question_text="MCQ",
+        question_type="MCQ",
+    )
+
+    c1 = Choice.objects.create(choice_id=q, choice_text="A", is_correct=True)
+    c2 = Choice.objects.create(choice_id=q, choice_text="B", is_correct=False)
+
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+    response = client.post(
+        reverse("instructor_choice_update", args=[c2.id]),
+        {"choice_text": "B", "is_correct": "on"},
+    )
+
+    messages = list(get_messages(response.wsgi_request))
+    assert "Only one correct answer is allowed." in str(messages[0])
 
 
 # test listing exam view
@@ -648,8 +1056,129 @@ def test_exam_update_view(client):
         password="pass",
     )
 
+    start = timezone.now()
+    end = start + timedelta(hours=1)
+
     exam = Exam.objects.create(
         title="Math Test",
+        description="desc",
+        start_time=start,
+        end_time=end,
+        created_by=instructor,
+    )
+
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+    response = client.post(
+        f"/instructor/exams/{exam.exam_id}/edit/",
+        {
+            "title": "New Title",
+            "description": "Updated desc",
+            "start_date": start.strftime("%Y-%m-%d"),
+            "start_time": start.strftime("%H:%M"),
+            "end_date": end.strftime("%Y-%m-%d"),
+            "end_time": end.strftime("%H:%M"),
+        },
+    )
+
+    exam.refresh_from_db()
+
+    assert response.status_code == 302
+    assert exam.title == "New Title"
+    assert exam.description == "Updated desc"
+
+    
+@pytest.mark.django_db
+def test_exam_update_success(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass",
+    )
+
+    start = timezone.now()
+    end = start + timedelta(hours=1)
+
+    exam = Exam.objects.create(
+        title="Math Test",
+        description="desc",
+        start_time=start,
+        end_time=end,
+        created_by=instructor,
+    )
+
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+    response = client.post(
+        f"/instructor/exams/{exam.exam_id}/edit/",
+        {
+            "title": "New Title",
+            "description": "Updated desc",
+            "start_date": start.date(),
+            "start_time": start.strftime("%H:%M"),
+            "end_date": end.date(),
+            "end_time": end.strftime("%H:%M"),
+        },
+    )
+
+    exam.refresh_from_db()
+    assert response.status_code == 302
+    assert exam.title == "New Title"
+    assert exam.description == "Updated desc"
+    
+    
+@pytest.mark.django_db
+def test_exam_update_missing_fields(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass",
+    )
+
+    exam = Exam.objects.create(
+        title="Math",
+        description="desc",
+        start_time=timezone.now(),
+        end_time=timezone.now() + timedelta(hours=1),
+        created_by=instructor,
+    )
+
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+    response = client.post(
+        f"/instructor/exams/{exam.exam_id}/edit/",
+        {
+            "title": "",
+            "start_date": "",
+            "start_time": "",
+            "end_date": "",
+            "end_time": "",
+        },
+    )
+
+    assert response.status_code == 200  
+    messages = list(get_messages(response.wsgi_request))
+    assert "All fields (title, start time, end time) are required." in str(messages[0])
+    
+@pytest.mark.django_db
+def test_exam_update_invalid_datetime(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass",
+    )
+
+    exam = Exam.objects.create(
+        title="Math",
         description="desc",
         start_time=timezone.now(),
         end_time=timezone.now() + timedelta(hours=1),
@@ -665,15 +1194,99 @@ def test_exam_update_view(client):
         f"/instructor/exams/{exam.exam_id}/edit/",
         {
             "title": "New Title",
-            "description": "Updated desc",
-            "start_time": exam.start_time,
-            "end_time": exam.end_time,
+            "description": "desc",
+            "start_date": "invalid-date",
+            "start_time": "invalid-time",
+            "end_date": "invalid-date",
+            "end_time": "invalid-time",
         },
     )
 
+    assert response.status_code == 200
+    messages = list(get_messages(response.wsgi_request))
+    assert "Please enter a valid date and time." in str(messages[0])
+    
+@pytest.mark.django_db
+def test_exam_update_title(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass",
+    )
+
+    start = timezone.now()
+    end = start + timedelta(hours=1)
+
+    exam = Exam.objects.create(
+        title="Old Title",
+        description="Old Desc",
+        start_time=start,
+        end_time=end,
+        created_by=instructor,
+    )
+
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+    response = client.post(
+        f"/instructor/exams/{exam.exam_id}/edit/",
+        {
+            "title": "Updated Title",
+            "description": "Old Desc",
+            "start_date": start.date(),
+            "start_time": start.strftime("%H:%M"),
+            "end_date": end.date(),
+            "end_time": end.strftime("%H:%M"),
+        }
+    )
+
     exam.refresh_from_db()
-    assert response.status_code == 302
-    assert exam.title == "New Title"
+    assert exam.title == "Updated Title"
+
+    
+@pytest.mark.django_db
+def test_exam_update_end_before_start_invalid(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pass",
+    )
+
+    start = timezone.now()
+    end = start + timedelta(hours=1)
+
+    exam = Exam.objects.create(
+        title="Math",
+        description="desc",
+        start_time=start,
+        end_time=end,
+        created_by=instructor,
+    )
+
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+    earlier = (start - timedelta(hours=2)).strftime("%H:%M")
+
+    response = client.post(
+        f"/instructor/exams/{exam.exam_id}/edit/",
+        {
+            "title": "Test",
+            "description": "desc",
+            "start_date": start.date(),
+            "start_time": start.strftime("%H:%M"),
+            "end_date": start.date(),
+            "end_time": earlier,  
+        },
+    )
+
+    assert response.status_code == 200
+    messages = list(get_messages(response.wsgi_request))
+    assert "End time must be after start time." in str(messages[0])
     
 # test delete exam
 @pytest.mark.django_db
