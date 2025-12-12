@@ -7,7 +7,7 @@
     {% if messages %}
         <div class="mb-0">
             {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">
                     {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
@@ -66,9 +66,71 @@
                         Cancel
                     </button>
                 </div>
+                <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                    <div class="card shadow-sm"><div class="card-body">
+                    <div class="text-muted small">Total Attempts</div>
+                    <div class="h4 mb-0">{{ student_stats.total_attempts }}</div>
+                    </div></div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="card shadow-sm"><div class="card-body">
+                    <div class="text-muted small">Submitted</div>
+                    <div class="h4 mb-0">{{ student_stats.submitted_count }}</div>
+                    </div></div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="card shadow-sm"><div class="card-body">
+                    <div class="text-muted small">Average Score</div>
+                    <div class="h4 mb-0">{{ student_stats.avg_score|default:"-"|floatformat:1 }}</div>
+                    </div></div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="card shadow-sm"><div class="card-body">
+                    <div class="text-muted small">Best Score</div>
+                    <div class="h4 mb-0">{{ student_stats.best_score|default:"-"|floatformat:1 }}</div>
+                    </div></div>
+                </div>
+                </div>
+
+                <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-3">Recent Exam Activity</h5>
+
+                    {% if recent_attempts %}
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                            <th>Exam</th><th>Title</th><th>Status</th><th>Score</th><th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for a in recent_attempts %}
+                            <tr>
+                                <td>{{ a.exam.exam_id }}</td>
+                                <td>{{ a.exam.title }}</td>
+                                <td>{% if a.submitted_at %}Submitted{% else %}In Progress{% endif %}</td>
+                                <td>{{ a.score|default:"-" }}</td>
+                                <td>{{ a.submitted_at|default:a.started_at|date:"Y-m-d H:i" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">No exam activity yet.</p>
+                    {% endif %}
+                </div>
+                </div>
+
             </form>
         </div>
     </div>
+    
 
 </div>
 

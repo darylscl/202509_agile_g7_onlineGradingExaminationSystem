@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load tz %}
 {% block title %}Exam Details{% endblock %}
 
 {% block content %}
@@ -22,12 +23,12 @@
 
                     <p class="mb-1">
                         <strong>Start Time:</strong>
-                        <span class="text-primary">{{ exam.start_time|date:"Y-m-d H:i" }}</span>
+                        <span class="text-primary">{{ exam.start_time|timezone:"Asia/Kuala_Lumpur"|date:"Y-m-d H:i" }}
                     </p>
 
                     <p>
                         <strong>End Time:</strong>
-                        <span class="text-danger">{{ exam.end_time|date:"Y-m-d H:i" }}</span>
+                        <span class="text-danger">{{ exam.end_time|timezone:"Asia/Kuala_Lumpur"|date:"Y-m-d H:i" }}
                     </p>
                 </div>
 
