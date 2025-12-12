@@ -11,12 +11,31 @@ from django.shortcuts import get_object_or_404
 from django.contrib import messages
 import re
 from django.utils.dateparse import parse_datetime
+from django.db.models import Avg, Max, Count
+from zoneinfo import ZoneInfo
+from datetime import datetime
 
 EMAIL_REGEX = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
 PASSWORD_REGEX = r"^(?=.*[A-Za-z])(?=.*\d).{8,}$"
 CONTACT_REGEX = r"^\d{10,11}$"
 MATRIC_REGEX = r"^PPE\d{4}$"
 
+KL = ZoneInfo("Asia/Kuala_Lumpur")
+UTC = ZoneInfo("UTC")
+
+
+def kl_date_time_to_utc(date_str: str, time_str: str):
+    """
+    date_str: 'YYYY-MM-DD'
+    time_str: 'HH:MM'
+    returns: aware datetime in UTC
+    """
+    naive = datetime.fromisoformat(f"{date_str}T{time_str}")   # datetime-local style
+    aware_kl = naive.replace(tzinfo=KL)
+    return aware_kl.astimezone(UTC)
+
+def now_kl():
+    return timezone.now().astimezone(KL)
 #todo list:
 # Update marks not able to save error
 
@@ -256,10 +275,14 @@ def student_profile(request):
             messages.error(request, "Matric number must be 6–15 characters, letters/numbers only.")
             return render(request, "app/student/profile.html", ctx())
 
-        if contact_raw and not contact:
-            messages.error(request, "Invalid phone number. Use 01XXXXXXXX or +601XXXXXXXX.")
+        if contact_raw and re.search(r"[A-Za-z]", contact_raw):
+            messages.error(request, "Invalid phone number. Digits only.")
             return render(request, "app/student/profile.html", ctx())
 
+        # then validate MY format
+        if contact and not is_valid_my_phone(contact):
+            messages.error(request, "Invalid phone number. Use 01XXXXXXXX or +601XXXXXXXX.")
+            return render(request, "app/student/profile.html", ctx())
         try:
             validate_email(email)
         except ValidationError:
@@ -340,11 +363,15 @@ def instructor_profile(request):
             messages.error(request, "Invalid phone number. Use 01XXXXXXXX or +601XXXXXXXX.")
             return render(request, "app/instructor/profile.html", ctx())
 
-        # If provided, validate Malaysia phone format
+        if contact_raw and re.search(r"[A-Za-z]", contact_raw):
+            messages.error(request, "Invalid phone number. Digits only.")
+            return render(request, "app/student/profile.html", ctx())
+
+        # then validate MY format
         if contact and not is_valid_my_phone(contact):
             messages.error(request, "Invalid phone number. Use 01XXXXXXXX or +601XXXXXXXX.")
-            return render(request, "app/instructor/profile.html", ctx())
-
+            return render(request, "app/student/profile.html", ctx())
+        
         if not full_name or not email:
             messages.error(request, "Full name and email are required.")
             return render(request, "app/instructor/profile.html", ctx())
@@ -511,84 +538,74 @@ def exam_create(request):
     if exam_id:
         exam = Exam.objects.filter(exam_id=exam_id, created_by=instructor).first()
 
+    # ---------------- CREATE EXAM ----------------
     if request.method == "POST" and "create_exam" in request.POST:
         title = (request.POST.get("title") or "").strip()
         description = request.POST.get("description") or ""
-        start_date = request.POST.get("start_date") or ""
-        start_time_part = request.POST.get("start_time") or ""
-        end_date = request.POST.get("end_date") or ""
-        end_time_part = request.POST.get("end_time") or ""
-        
+
+        start_date = (request.POST.get("start_date") or "").strip()
+        start_time_part = (request.POST.get("start_time") or "").strip()
+        end_date = (request.POST.get("end_date") or "").strip()
+        end_time_part = (request.POST.get("end_time") or "").strip()
 
         if not title or not start_date or not start_time_part or not end_date or not end_time_part:
-            messages.error(
-                request,
-                "All fields (title, start time, end time) are required.",
-            )
-            return render(
-                request,
-                "app/instructor/exam_form.html",
-                {"exam": exam, "questions": exam.questions.all() if exam else []},
-            )
-            
-        start_raw = f"{start_date} {start_time_part}"
-        end_raw = f"{end_date} {end_time_part}"
-        start_time = parse_datetime(start_raw)
-        end_time = parse_datetime(end_raw)
+            messages.error(request, "All fields (title, start time, end time) are required.")
+            return render(request, "app/instructor/exam_form.html", {
+                "exam": exam,
+                "questions": exam.questions.all() if exam else [],
+            })
 
-        if not start_time or not end_time:
+        # Convert KL input -> UTC datetimes
+        try:
+            start_time = kl_date_time_to_utc(start_date, start_time_part)
+            end_time = kl_date_time_to_utc(end_date, end_time_part)
+        except ValueError:
             messages.error(request, "Please enter a valid date and time.")
-            return render(
-                request,
-                "app/instructor/exam_form.html",
-                {"exam": exam, "questions": exam.questions.all() if exam else []},
-            )
+            return render(request, "app/instructor/exam_form.html", {
+                "exam": exam,
+                "questions": exam.questions.all() if exam else [],
+            })
 
-        if timezone.is_naive(start_time):
-            start_time = timezone.make_aware(start_time)
-        if timezone.is_naive(end_time):
-            end_time = timezone.make_aware(end_time)
-            
+        # Validate order
         if end_time <= start_time:
             messages.error(request, "End time must be after start time.")
-            return render(
-                request,
-                "app/instructor/exam_form.html",
-                {"exam": exam, "questions": exam.questions.all() if exam else []},
-            )
-            
-        now = timezone.now()
-        if start_time < now:
-            messages.error(request, "Start time cannot be earlier than the current date & time.")
-            return render(request, "app/instructor/exam_form.html",
-                          {"exam": exam, "questions": exam.questions.all() if exam else []})
+            return render(request, "app/instructor/exam_form.html", {
+                "exam": exam,
+                "questions": exam.questions.all() if exam else [],
+            })
+
+        # Validate "not earlier than now" in KL (user perspective)
+        if start_time.astimezone(KL) < now_kl():
+            messages.error(request, "Start time cannot be earlier than current Malaysia time.")
+            return render(request, "app/instructor/exam_form.html", {
+                "exam": exam,
+                "questions": exam.questions.all() if exam else [],
+            })
 
         try:
             exam = Exam.objects.create(
                 title=title,
                 description=description,
-                start_time=start_time,
-                end_time=end_time,
+                start_time=start_time,  # UTC
+                end_time=end_time,      # UTC
                 created_by=instructor,
             )
         except ValidationError as e:
             messages.error(request, e.messages[0])
-            return render(
-                request,
-                "app/instructor/exam_form.html",
-                {"exam": None, "questions": []},
-            )
+            return render(request, "app/instructor/exam_form.html", {"exam": None, "questions": []})
 
         return redirect(f"/instructor/exams/create/?exam_id={exam.exam_id}")
 
+    # ---------------- ADD QUESTION ----------------
     if request.method == "POST" and "add_question" in request.POST:
         exam = Exam.objects.get(exam_id=exam_id, created_by=instructor)
-        
+
         marks = request.POST.get("marks", "1")
         try:
             marks = float(marks)
-        except:
+        except Exception:
             marks = 1
+
         question = ExamQuestion.objects.create(
             exam=exam,
             question_text=request.POST.get("question_text"),
@@ -638,23 +655,19 @@ def exam_update(request, exam_id):
         end_time_part = request.POST.get("end_time") or ""
 
         if not title or not start_date or not start_time_part or not end_date or not end_time_part:
-            messages.error(request, "All fields (title, start time, end time) are required.")
+            messages.error(request, "All fields (title, start date/time, end date/time) are required.")
             return render(request, "app/instructor/exam_edit.html", {"exam": exam})
 
-        start_raw = f"{start_date} {start_time_part}"
-        end_raw = f"{end_date} {end_time_part}"
-
-        start_time = parse_datetime(start_raw)
-        end_time = parse_datetime(end_raw)
-
-        if not start_time or not end_time:
+        try:
+            start_time = kl_date_time_to_utc(start_date, start_time_part)
+            end_time = kl_date_time_to_utc(end_date, end_time_part)
+        except ValueError:
             messages.error(request, "Please enter a valid date and time.")
             return render(request, "app/instructor/exam_edit.html", {"exam": exam})
 
-        if timezone.is_naive(start_time):
-            start_time = timezone.make_aware(start_time)
-        if timezone.is_naive(end_time):
-            end_time = timezone.make_aware(end_time)
+        if end_time <= start_time:
+            messages.error(request, "End time must be after start time.")
+            return render(request, "app/instructor/exam_edit.html", {"exam": exam})
 
         exam.title = title
         exam.description = description
@@ -662,14 +675,13 @@ def exam_update(request, exam_id):
         exam.end_time = end_time
 
         try:
-            exam.full_clean()  
+            exam.full_clean()
             exam.save()
         except ValidationError as e:
             messages.error(request, e.messages[0])
             return render(request, "app/instructor/exam_edit.html", {"exam": exam})
 
         return redirect("instructor_exam_detail", exam_id=exam.exam_id)
-
 
     return render(request, "app/instructor/exam_edit.html", {"exam": exam})
 

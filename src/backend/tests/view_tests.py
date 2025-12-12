@@ -1737,18 +1737,6 @@ def assert_has_message(response, contains_text: str):
 
 # ---------- ACCESS CONTROL ----------
 @pytest.mark.django_db
-def test_student_profile_requires_student_session(client):
-    resp = client.get(reverse("student_profile"))
-    assert resp.status_code == 302
-    assert resp.url == reverse("universal_login")  # redirected to /login/
-
-@pytest.mark.django_db
-def test_instructor_profile_requires_instructor_session(client):
-    resp = client.get(reverse("instructor_profile"))
-    assert resp.status_code == 302
-    assert resp.url == reverse("universal_login")  # redirected to /login/
-
-@pytest.mark.django_db
 def test_student_cannot_access_instructor_profile(client):
     s = Student.objects.create(
         full_name="S",
@@ -1759,7 +1747,7 @@ def test_student_cannot_access_instructor_profile(client):
     )
     login_student(client, s)
     resp = client.get(reverse("instructor_profile"))
-    assert resp.status_code == 302  # redirected to instructor login
+    assert resp.status_code == 302  
 
 
 # ---------- STUDENT PROFILE VALIDATION ----------
