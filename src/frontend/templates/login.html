@@ -40,11 +40,18 @@
 
                         </div>
 
-                        <div class="mb-3">
+                        <div class="mb-3 position-relative">
                             <label for="password" class="form-label fw-semibold">Password</label>
-                            <input type="password" name="password" id="password" class="form-control form-control-lg"
-                                placeholder="Enter your password" required>
+
+                            <input type="password" name="password" id="password"
+                                class="form-control form-control-lg pe-5" placeholder="Enter your password" required>
+
+                            <!-- Eye toggle -->
+                            <span class="password-toggle" onclick="togglePassword()">
+                                <i id="toggleIcon" class="bi bi-eye-slash text-muted"></i>
+                            </span>
                         </div>
+
 
                         <button type="submit" class="btn btn-primary btn-lg w-100 mb-3">
                             Login
@@ -136,7 +143,35 @@
             transform: translateY(0);
         }
     }
+
+    .password-toggle {
+    position: absolute;
+    right: 16px;
+    top: 70%;              /* ⬅ move down slightly */
+    transform: translateY(-50%);
+    cursor: pointer;
+}
+
 </style>
+
+<script>
+    function togglePassword() {
+        const input = document.getElementById("password");
+        const icon = document.getElementById("toggleIcon");
+
+        if (input.type === "password") {
+            input.type = "text";
+            icon.classList.remove("bi-eye-slash");
+            icon.classList.add("bi-eye");
+        } else {
+            input.type = "password";
+            icon.classList.remove("bi-eye");
+            icon.classList.add("bi-eye-slash");
+        }
+    }
+</script>
+
+
 
 
 
