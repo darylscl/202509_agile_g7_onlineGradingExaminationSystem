@@ -7,6 +7,9 @@ urlpatterns = [
     path("signup/", views.signup_role_select, name="signup_role_select"),
     path("login/", views.universal_login, name="universal_login"),
     path("logout/", views.custom_logout, name="logout"),
+    path("login/", views.universal_login, name="student_login"),
+    path("login/", views.universal_login, name="instructor_login"),
+    path("login/", views.universal_login, name="universal_login"),
     
     #User module
     path("register/student/", views.student_register, name="student_register"),

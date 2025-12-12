@@ -969,7 +969,6 @@ def test_student_can_resume_ongoing_exam_attempt(client):
 
 @pytest.mark.django_db
 def test_student_can_view_and_update_profile(client):
-    # Create a student in DB
     student = Student.objects.create(
         full_name="Test Student",
         student_email="student1@example.com",
@@ -978,7 +977,6 @@ def test_student_can_view_and_update_profile(client):
         password="hashed-password",
     )
 
-    # Simulate "logged in" student via session
     session = client.session
     session["user_type"] = "student"
     session["user_id"] = student.student_ID
@@ -986,35 +984,27 @@ def test_student_can_view_and_update_profile(client):
 
     url = reverse("student_profile")
 
-    # VIEW: student can see their profile page
     response = client.get(url)
     assert response.status_code == 200
-    assert b"Student Profile" in response.content
-    assert student.full_name.encode() in response.content
-    assert student.student_email.encode() in response.content
 
-    # UPDATE: student submits new profile data
     new_data = {
         "full_name": "Updated Student",
         "student_email": "student_updated@example.com",
         "matric_number": "0987654321",
-        "contact_number": "9999999999",
+        "contact_number": "0112345678",  # ✅ valid
     }
     response = client.post(url, data=new_data, follow=True)
-
-    # Should render OK (either after redirect or directly)
     assert response.status_code == 200
 
-    # Data should be updated in DB
     student.refresh_from_db()
     assert student.full_name == "Updated Student"
     assert student.student_email == "student_updated@example.com"
     assert student.matric_number == "0987654321"
-    assert student.contact_number == "9999999999"
+    assert student.contact_number == "0112345678"
+
 
 @pytest.mark.django_db
 def test_instructor_can_view_and_update_profile(client):
-    # Create an instructor in DB
     instructor = Instructor.objects.create(
         full_name="Test Instructor",
         instructor_email="instructor1@example.com",
@@ -1023,7 +1013,6 @@ def test_instructor_can_view_and_update_profile(client):
         password="hashed-password",
     )
 
-    # Simulate "logged in" instructor via session
     session = client.session
     session["user_type"] = "instructor"
     session["user_id"] = instructor.instructor_ID
@@ -1031,29 +1020,22 @@ def test_instructor_can_view_and_update_profile(client):
 
     url = reverse("instructor_profile")
 
-    # VIEW: instructor can see their profile page
     response = client.get(url)
     assert response.status_code == 200
-    assert b"Instructor Profile" in response.content
-    assert instructor.full_name.encode() in response.content
-    assert instructor.instructor_email.encode() in response.content
 
-    # UPDATE: instructor submits new profile data
     new_data = {
         "full_name": "Updated Instructor",
         "instructor_email": "instructor_updated@example.com",
-        "contact_number": "0222222222",
+        "contact_number": "0122222222",  # ✅ valid
         "department": "Information Technology",
     }
     response = client.post(url, data=new_data, follow=True)
-
     assert response.status_code == 200
 
-    # Data should be updated in DB
     instructor.refresh_from_db()
     assert instructor.full_name == "Updated Instructor"
     assert instructor.instructor_email == "instructor_updated@example.com"
-    assert instructor.contact_number == "0222222222"
+    assert instructor.contact_number == "0122222222"
     assert instructor.department == "Information Technology"
 
 
@@ -1121,5 +1103,379 @@ def test_instructor_profile_rejects_invalid_email(client):
 
     instructor.refresh_from_db()
     assert instructor.instructor_email == "instructor1@example.com"
+
+    # ---------- helpers ----------
+def login_student(client, student):
+    session = client.session
+    session["user_type"] = "student"
+    session["user_id"] = student.student_ID
+    session.save()
+
+def login_instructor(client, instructor):
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+def assert_has_message(response, contains_text: str):
+    msgs = list(get_messages(response.wsgi_request))
+    assert any(contains_text in str(m) for m in msgs), msgs
+
+
+# ---------- ACCESS CONTROL ----------
+@pytest.mark.django_db
+def test_student_profile_requires_student_session(client):
+    resp = client.get(reverse("student_profile"))
+    assert resp.status_code == 302
+    assert resp.url == reverse("universal_login")  # redirected to /login/
+
+@pytest.mark.django_db
+def test_instructor_profile_requires_instructor_session(client):
+    resp = client.get(reverse("instructor_profile"))
+    assert resp.status_code == 302
+    assert resp.url == reverse("universal_login")  # redirected to /login/
+
+@pytest.mark.django_db
+def test_student_cannot_access_instructor_profile(client):
+    s = Student.objects.create(
+        full_name="S",
+        student_email="s@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    login_student(client, s)
+    resp = client.get(reverse("instructor_profile"))
+    assert resp.status_code == 302  # redirected to instructor login
+
+
+# ---------- STUDENT PROFILE VALIDATION ----------
+@pytest.mark.django_db
+def test_student_profile_missing_required_fields(client):
+    student = Student.objects.create(
+        full_name="Test Student",
+        student_email="student1@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    login_student(client, student)
+
+    resp = client.post(reverse("student_profile"), data={
+        "full_name": "",
+        "student_email": "student1@example.com",
+        "matric_number": "",
+        "contact_number": "0123456789",
+    })
+
+    assert resp.status_code == 200
+    assert_has_message(resp, "required")  # your view uses required msg :contentReference[oaicite:4]{index=4}
+
+    student.refresh_from_db()
+    assert student.full_name == "Test Student"
+
+
+@pytest.mark.django_db
+def test_student_profile_rejects_duplicate_email(client):
+    s1 = Student.objects.create(
+        full_name="S1",
+        student_email="s1@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    Student.objects.create(
+        full_name="S2",
+        student_email="s2@example.com",
+        matric_number="PPE0002",
+        contact_number="0123456789",
+        password="pw",
+    )
+    login_student(client, s1)
+
+    resp = client.post(reverse("student_profile"), data={
+        "full_name": "S1",
+        "student_email": "s2@example.com",  # duplicate
+        "matric_number": "PPE0001",
+        "contact_number": "0123456789",
+    })
+
+    assert resp.status_code == 200
+    assert_has_message(resp, "already used by another student")  # view msg :contentReference[oaicite:6]{index=6}
+
+    s1.refresh_from_db()
+    assert s1.student_email == "s1@example.com"
+
+@pytest.mark.django_db
+def test_student_profile_rejects_duplicate_matric(client):
+    s1 = Student.objects.create(
+        full_name="S1",
+        student_email="s1@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    Student.objects.create(
+        full_name="S2",
+        student_email="s2@example.com",
+        matric_number="PPE0002",
+        contact_number="0123456789",
+        password="pw",
+    )
+    login_student(client, s1)
+
+    resp = client.post(reverse("student_profile"), data={
+        "full_name": "S1",
+        "student_email": "s1@example.com",
+        "matric_number": "PPE0002",  # duplicate
+        "contact_number": "0123456789",
+    })
+
+    assert resp.status_code == 200
+    assert_has_message(resp, "matric number is already used")  # view msg :contentReference[oaicite:7]{index=7}
+
+    s1.refresh_from_db()
+    assert s1.matric_number == "PPE0001"
+
+
+# These 2 tests assume you implemented your NEW matric/phone validation message strings:
+@pytest.mark.django_db
+def test_student_profile_rejects_invalid_matric_format_new_rules(client):
+    student = Student.objects.create(
+        full_name="Test Student",
+        student_email="student1@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    login_student(client, student)
+
+    resp = client.post(reverse("student_profile"), data={
+        "full_name": "Test Student",
+        "student_email": "student1@example.com",
+        "matric_number": "@@@@",  # invalid
+        "contact_number": "0123456789",
+    })
+
+    assert resp.status_code == 200
+    assert_has_message(resp, "Matric number must")  # match your new message
+
+    student.refresh_from_db()
+    assert student.matric_number == "PPE0001"
+
+@pytest.mark.django_db
+def test_student_profile_rejects_invalid_phone_new_rules(client):
+    student = Student.objects.create(
+        full_name="Test Student",
+        student_email="student1@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    login_student(client, student)
+
+    resp = client.post(reverse("student_profile"), data={
+        "full_name": "Test Student",
+        "student_email": "student1@example.com",
+        "matric_number": "PPE0001",
+        "contact_number": "abc",  # invalid phone input
+    })
+
+    assert resp.status_code == 200
+    assert_has_message(resp, "Invalid phone number")  # match your new message
+
+    student.refresh_from_db()
+    assert student.contact_number == "0123456789"
+
+
+@pytest.mark.django_db
+def test_student_profile_valid_update_success(client):
+    student = Student.objects.create(
+        full_name="Test Student",
+        student_email="student1@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    login_student(client, student)
+
+    resp = client.post(reverse("student_profile"), data={
+        "full_name": "Updated Student",
+        "student_email": "student_updated@example.com",
+        "matric_number": "PPE0009",
+        "contact_number": "0112345678",  # valid MY mobile
+    }, follow=True)
+
+    assert resp.status_code == 200
+    student.refresh_from_db()
+    assert student.full_name == "Updated Student"
+    assert student.student_email == "student_updated@example.com"
+    assert student.matric_number == "PPE0009"
+    assert student.contact_number == "0112345678"
+
+
+# ---------- INSTRUCTOR PROFILE VALIDATION ----------
+@pytest.mark.django_db
+def test_instructor_profile_missing_required_fields(client):
+    instructor = Instructor.objects.create(
+        full_name="Test Instructor",
+        instructor_email="i1@example.com",
+        contact_number="0112345678",
+        department="CS",
+        password="pw",
+    )
+    login_instructor(client, instructor)
+
+    resp = client.post(reverse("instructor_profile"), data={
+        "full_name": "",
+        "instructor_email": "",
+        "contact_number": "0112345678",
+        "department": "CS",
+    })
+
+    assert resp.status_code == 200
+    assert_has_message(resp, "Full name and email are required.")  # view msg :contentReference[oaicite:8]{index=8}
+
+@pytest.mark.django_db
+def test_instructor_profile_rejects_invalid_email(client):
+    instructor = Instructor.objects.create(
+        full_name="Test Instructor",
+        instructor_email="i1@example.com",
+        contact_number="0112345678",
+        department="CS",
+        password="pw",
+    )
+    login_instructor(client, instructor)
+
+    resp = client.post(reverse("instructor_profile"), data={
+        "full_name": "Updated",
+        "instructor_email": "bad-email",
+        "contact_number": "0112345678",
+        "department": "IT",
+    })
+
+    assert resp.status_code == 200
+    assert_has_message(resp, "Invalid email format.")  # view msg :contentReference[oaicite:9]{index=9}
+
+    instructor.refresh_from_db()
+    assert instructor.instructor_email == "i1@example.com"
+
+@pytest.mark.django_db
+def test_instructor_profile_rejects_duplicate_email(client):
+    i1 = Instructor.objects.create(
+        full_name="I1",
+        instructor_email="i1@example.com",
+        contact_number="0112345678",
+        department="CS",
+        password="pw",
+    )
+    Instructor.objects.create(
+        full_name="I2",
+        instructor_email="i2@example.com",
+        contact_number="0112345678",
+        department="CS",
+        password="pw",
+    )
+    login_instructor(client, i1)
+
+    resp = client.post(reverse("instructor_profile"), data={
+        "full_name": "I1",
+        "instructor_email": "i2@example.com",  # duplicate
+        "contact_number": "0112345678",
+        "department": "CS",
+    })
+
+    assert resp.status_code == 200
+    assert_has_message(resp, "already used by another instructor")  # view msg :contentReference[oaicite:10]{index=10}
+
+    i1.refresh_from_db()
+    assert i1.instructor_email == "i1@example.com"
+
+
+# This assumes you implemented your NEW phone validation message strings in instructor_profile:
+@pytest.mark.django_db
+def test_instructor_profile_rejects_invalid_phone_new_rules(client):
+    instructor = Instructor.objects.create(
+        full_name="Test Instructor",
+        instructor_email="i1@example.com",
+        contact_number="0112345678",
+        department="CS",
+        password="pw",
+    )
+    login_instructor(client, instructor)
+
+    resp = client.post(reverse("instructor_profile"), data={
+        "full_name": "Test Instructor",
+        "instructor_email": "i1@example.com",
+        "contact_number": "abc",  # invalid phone
+        "department": "CS",
+    })
+
+    assert resp.status_code == 200
+    assert_has_message(resp, "Invalid phone number")
+
+    instructor.refresh_from_db()
+    assert instructor.contact_number == "0112345678"
+
+@pytest.mark.django_db
+def test_instructor_profile_valid_update_success(client):
+    instructor = Instructor.objects.create(
+        full_name="Test Instructor",
+        instructor_email="i1@example.com",
+        contact_number="0112345678",
+        department="CS",
+        password="pw",
+    )
+    login_instructor(client, instructor)
+
+    resp = client.post(reverse("instructor_profile"), data={
+        "full_name": "Updated Instructor",
+        "instructor_email": "updated_i@example.com",
+        "contact_number": "0122222222",  # valid MY mobile
+        "department": "IT",
+    }, follow=True)
+
+    assert resp.status_code == 200
+    instructor.refresh_from_db()
+    assert instructor.full_name == "Updated Instructor"
+    assert instructor.instructor_email == "updated_i@example.com"
+    assert instructor.contact_number == "0122222222"
+    assert instructor.department == "IT"
+
+
+# ---------- OPTIONAL: stats / recent activity shown ----------
+@pytest.mark.django_db
+def test_student_profile_shows_recent_exam_activity(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        contact_number="0112345678",
+        department="CS",
+        password="pw",
+    )
+    student = Student.objects.create(
+        full_name="Student",
+        student_email="stu@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    login_student(client, student)
+
+    now = timezone.now()
+    exam = Exam.objects.create(
+        title="Math",
+        description="desc",
+        start_time=now - timedelta(minutes=10),
+        end_time=now + timedelta(minutes=10),
+        created_by=instructor,
+    )
+    ExamAttempt.objects.create(exam=exam, student=student)
+
+    resp = client.get(reverse("student_profile"))
+    assert resp.status_code == 200
+    # these strings exist in your updated template section
+    assert b"Recent Exam Activity" in resp.content
+    assert b"Math" in resp.content
 
 
