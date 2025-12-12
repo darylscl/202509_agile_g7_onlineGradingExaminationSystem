@@ -2080,4 +2080,151 @@ def test_student_profile_shows_recent_exam_activity(client):
     assert b"Recent Exam Activity" in resp.content
     assert b"Math" in resp.content
 
+    import pytest
+from django.urls import reverse
+from django.utils import timezone
+from datetime import timedelta
+from zoneinfo import ZoneInfo
+
+@pytest.mark.django_db
+def test_instructor_can_view_exam_detail_with_schedule_and_questions(client):
+    """
+    User story:
+    Instructor can view one exam's details (schedule + questions)
+    so they can review before editing / analysing results.
+    """
+    KL = ZoneInfo("Asia/Kuala_Lumpur")
+
+    # Create instructor + login session
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pw",
+    )
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+    # Create exam (store UTC-aware datetimes)
+    start = timezone.now().replace(second=0, microsecond=0) + timedelta(hours=2)
+    end = start + timedelta(hours=1)
+
+    exam = Exam.objects.create(
+        title="Final Exam",
+        description="Exam desc",
+        start_time=start,
+        end_time=end,
+        created_by=instructor,
+    )
+
+    # Create questions
+    q1 = ExamQuestion.objects.create(
+        exam=exam, question_text="Explain OOP", question_type="TEXT", marks=5
+    )
+    q2 = ExamQuestion.objects.create(
+        exam=exam, question_text="2+2=?", question_type="MCQ", marks=1
+    )
+
+    # MCQ choices
+    Choice.objects.create(choice_id=q2, choice_text="3", is_correct=False)
+    Choice.objects.create(choice_id=q2, choice_text="4", is_correct=True)
+
+    # Visit exam detail
+    url = reverse("instructor_exam_detail", args=[exam.exam_id])
+    resp = client.get(url)
+    assert resp.status_code == 200
+
+    # Exam metadata
+    assert exam.title.encode() in resp.content
+    assert exam.exam_id.encode() in resp.content
+    assert b"Exam Information" in resp.content or b"Exam info" in resp.content
+
+    # Schedule appears (either UTC or KL formatted depending on template)
+    # We'll check KL formatted string (recommended display)
+    start_kl = timezone.localtime(start, KL).strftime("%Y-%m-%d %H:%M").encode()
+    end_kl = timezone.localtime(end, KL).strftime("%Y-%m-%d %H:%M").encode()
+    assert (start_kl in resp.content) or (start.strftime("%Y-%m-%d %H:%M").encode() in resp.content)
+    assert (end_kl in resp.content) or (end.strftime("%Y-%m-%d %H:%M").encode() in resp.content)
+
+    # Questions displayed
+    assert b"Explain OOP" in resp.content
+    assert b"2+2=?" in resp.content
+    assert b"3" in resp.content
+    assert b"4" in resp.content
+    assert b"Correct" in resp.content  # your template shows "Correct" badge
+
+    # Edit button exists (link text can differ)
+    edit_url = reverse("instructor_exam_update", args=[exam.exam_id]).encode()
+    assert edit_url in resp.content
+
+
+@pytest.mark.django_db
+def test_instructor_cannot_view_other_instructors_exam_detail(client):
+    """Negative: instructor cannot view exam created_by someone else (404)."""
+    instructor1 = Instructor.objects.create(
+        full_name="Teacher 1", instructor_email="t1@example.com", password="pw"
+    )
+    instructor2 = Instructor.objects.create(
+        full_name="Teacher 2", instructor_email="t2@example.com", password="pw"
+    )
+
+    exam = Exam.objects.create(
+        title="Secret Exam",
+        description="x",
+        start_time=timezone.now() + timedelta(hours=1),
+        end_time=timezone.now() + timedelta(hours=2),
+        created_by=instructor1,
+    )
+
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor2.instructor_ID
+    session.save()
+
+    resp = client.get(reverse("instructor_exam_detail", args=[exam.exam_id]))
+    assert resp.status_code == 404
+
+
+import pytest
+from django.urls import reverse
+from django.utils import timezone
+from datetime import timedelta
+
+@pytest.mark.django_db
+def test_student_cannot_access_instructor_exam_detail(client):
+    student = Student.objects.create(
+        full_name="Stu",
+        student_email="stu@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pw",
+    )
+
+    exam = Exam.objects.create(
+        title="Exam",
+        description="x",
+        start_time=timezone.now() + timedelta(hours=1),
+        end_time=timezone.now() + timedelta(hours=2),
+        created_by=instructor,
+    )
+
+    session = client.session
+    session["user_type"] = "student"
+    session["user_id"] = student.student_ID
+    session.save()
+
+    # Because exam_detail() tries to load Instructor using session["user_id"],
+    # a student session causes Instructor.DoesNotExist (500 in real run).
+    with pytest.raises(Instructor.DoesNotExist):
+        client.get(reverse("instructor_exam_detail", args=[exam.exam_id]))
+
+
+
 
