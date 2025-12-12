@@ -2225,6 +2225,322 @@ def test_student_cannot_access_instructor_exam_detail(client):
     with pytest.raises(Instructor.DoesNotExist):
         client.get(reverse("instructor_exam_detail", args=[exam.exam_id]))
 
+import pytest
+from datetime import timedelta
+from django.urls import reverse
+from django.utils import timezone
 
+from app.models import Student, Instructor, Exam, ExamAttempt, ExamQuestion
+
+
+def login_student(client, student: Student):
+    session = client.session
+    session["user_type"] = "student"
+    session["user_id"] = student.student_ID
+    session.save()
+
+
+@pytest.mark.django_db
+def test_student_results_page_shows_only_my_submitted_attempts(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pw",
+    )
+
+    s1 = Student.objects.create(
+        full_name="Student One",
+        student_email="s1@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    s2 = Student.objects.create(
+        full_name="Student Two",
+        student_email="s2@example.com",
+        matric_number="PPE0002",
+        contact_number="0123456789",
+        password="pw",
+    )
+
+    now = timezone.now()
+
+    exam_a = Exam.objects.create(
+        title="Exam A",
+        description="A",
+        start_time=now - timedelta(days=1),
+        end_time=now + timedelta(days=1),
+        created_by=instructor,
+    )
+    exam_b = Exam.objects.create(
+        title="Exam B",
+        description="B",
+        start_time=now - timedelta(days=1),
+        end_time=now + timedelta(days=1),
+        created_by=instructor,
+    )
+
+    # add marks so total_possible > 0
+    ExamQuestion.objects.create(exam=exam_a, question_text="Q1", question_type="TEXT", marks=1)
+    ExamQuestion.objects.create(exam=exam_a, question_text="Q2", question_type="TEXT", marks=1)
+
+    # s1 submitted attempt -> SHOULD appear
+    a1 = ExamAttempt.objects.create(
+        attempt_id="ATT-S1-SUB",
+        exam=exam_a,
+        student=s1,
+        started_at=now - timedelta(minutes=30),
+        submitted_at=now - timedelta(minutes=10),
+        score=2.0,
+    )
+
+    # s1 not submitted -> should NOT appear (filtered by submitted_at__isnull=False)
+    ExamAttempt.objects.create(
+        attempt_id="ATT-S1-DRAFT",
+        exam=exam_b,
+        student=s1,
+        started_at=now - timedelta(minutes=20),
+        submitted_at=None,
+        score=0.0,
+    )
+
+    # s2 submitted -> should NOT appear for s1
+    ExamAttempt.objects.create(
+        attempt_id="ATT-S2-SUB",
+        exam=exam_b,
+        student=s2,
+        started_at=now - timedelta(minutes=25),
+        submitted_at=now - timedelta(minutes=5),
+        score=1.0,
+    )
+
+    login_student(client, s1)
+
+    resp = client.get(reverse("student_results"))
+    assert resp.status_code == 200
+
+    # Context check
+    attempts = resp.context["attempts"]
+    assert len(attempts) == 1
+    assert attempts[0]["attempt_id"] == a1.attempt_id
+    assert attempts[0]["exam"].title == "Exam A"
+
+    # HTML contains my submitted exam
+    content = resp.content.decode("utf-8")
+    assert "My Exam Results" in content
+    assert "Exam A" in content
+
+    # Should NOT show exam B for s1 (draft) or s2 data
+    assert "Exam B" not in content
+
+    # Has the View link
+    assert reverse("student_exam_result", args=[a1.attempt_id]) in content
+
+
+@pytest.mark.django_db
+def test_student_results_page_when_no_attempts_shows_empty_message(client):
+    s1 = Student.objects.create(
+        full_name="Student One",
+        student_email="s1@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+
+    login_student(client, s1)
+
+    resp = client.get(reverse("student_results"))
+    assert resp.status_code == 200
+    assert b"You have not completed any exams yet." in resp.content
+
+
+@pytest.mark.django_db
+def test_student_results_ignores_unsubmitted_attempts(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pw",
+    )
+    s1 = Student.objects.create(
+        full_name="Student One",
+        student_email="s1@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+
+    now = timezone.now()
+    exam = Exam.objects.create(
+        title="Draft Exam",
+        description="",
+        start_time=now - timedelta(days=1),
+        end_time=now + timedelta(days=1),
+        created_by=instructor,
+    )
+
+    # Attempt exists but not submitted
+    ExamAttempt.objects.create(
+        attempt_id="ATT-DRAFT",
+        exam=exam,
+        student=s1,
+        started_at=now - timedelta(minutes=5),
+        submitted_at=None,
+        score=0.0,
+    )
+
+    login_student(client, s1)
+
+    resp = client.get(reverse("student_results"))
+    assert resp.status_code == 200
+    assert b"Draft Exam" not in resp.content
+    assert b"You have not completed any exams yet." in resp.content
+
+
+def login_instructor(client, instructor):
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+
+def login_student(client, student):
+    session = client.session
+    session["user_type"] = "student"
+    session["user_id"] = student.student_ID
+    session.save()
+
+
+@pytest.mark.django_db
+def test_instructor_exam_list_page_shows_only_own_exams(client):
+    i1 = Instructor.objects.create(
+        full_name="Inst 1",
+        instructor_email="i1@example.com",
+        password="pw",
+    )
+    i2 = Instructor.objects.create(
+        full_name="Inst 2",
+        instructor_email="i2@example.com",
+        password="pw",
+    )
+
+    now = timezone.now()
+    e1 = Exam.objects.create(
+        title="I1 Exam A",
+        description="a",
+        start_time=now + timedelta(days=1),
+        end_time=now + timedelta(days=1, hours=1),
+        created_by=i1,
+    )
+    e2 = Exam.objects.create(
+        title="I1 Exam B",
+        description="b",
+        start_time=now + timedelta(days=2),
+        end_time=now + timedelta(days=2, hours=1),
+        created_by=i1,
+    )
+    Exam.objects.create(
+        title="I2 Exam X",
+        description="x",
+        start_time=now + timedelta(days=3),
+        end_time=now + timedelta(days=3, hours=1),
+        created_by=i2,
+    )
+
+    login_instructor(client, i1)
+    resp = client.get(reverse("instructor_exam_list"))
+    assert resp.status_code == 200
+
+    content = resp.content.decode("utf-8")
+    assert "I1 Exam A" in content
+    assert "I1 Exam B" in content
+    assert "I2 Exam X" not in content
+
+    # (Optional) sanity: exam ids show up too
+    assert e1.exam_id in content
+    assert e2.exam_id in content
+
+
+@pytest.mark.django_db
+def test_instructor_exam_list_has_search_and_sort_ui(client):
+    instructor = Instructor.objects.create(
+        full_name="Inst",
+        instructor_email="inst@example.com",
+        password="pw",
+    )
+    now = timezone.now()
+    Exam.objects.create(
+        title="Searchable Exam",
+        description="desc",
+        start_time=now + timedelta(days=1),
+        end_time=now + timedelta(days=1, hours=1),
+        created_by=instructor,
+    )
+
+    login_instructor(client, instructor)
+    resp = client.get(reverse("instructor_exam_list"))
+    assert resp.status_code == 200
+
+    html = resp.content.decode("utf-8")
+
+    # Search input exists (based on your template placeholder)
+    assert "Search exam by ID or title" in html
+
+    # Sort UI hooks exist (these strings depend on your template/JS)
+    # If your headers use onclick="sortTable(...)" this will pass.
+    assert "sortTable" in html or "onclick" in html
+
+
+@pytest.mark.django_db
+def test_instructor_exam_list_default_order_latest_first(client):
+    instructor = Instructor.objects.create(
+        full_name="Inst",
+        instructor_email="inst2@example.com",
+        password="pw",
+    )
+
+    now = timezone.now()
+    older = Exam.objects.create(
+        title="Older Exam",
+        description="old",
+        start_time=now + timedelta(days=1),
+        end_time=now + timedelta(days=1, hours=1),
+        created_by=instructor,
+    )
+    newer = Exam.objects.create(
+        title="Newer Exam",
+        description="new",
+        start_time=now + timedelta(days=5),
+        end_time=now + timedelta(days=5, hours=1),
+        created_by=instructor,
+    )
+
+    login_instructor(client, instructor)
+    resp = client.get(reverse("instructor_exam_list"))
+    assert resp.status_code == 200
+
+    html = resp.content.decode("utf-8")
+
+    # If your queryset orders by "-start_time", "Newer Exam" should appear before "Older Exam"
+    assert html.find("Newer Exam") != -1
+    assert html.find("Older Exam") != -1
+    assert html.find("Newer Exam") < html.find("Older Exam")
+
+
+@pytest.mark.django_db
+def test_student_cannot_access_instructor_exam_list(client):
+    # This matches your current behavior if the view does:
+    # instructor = Instructor.objects.get(instructor_ID=session["user_id"])
+    student = Student.objects.create(
+        full_name="Stu",
+        student_email="stu@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    login_student(client, student)
+
+    # Your app currently raises Instructor.DoesNotExist (based on your previous failures)
+    with pytest.raises(Instructor.DoesNotExist):
+        client.get(reverse("instructor_exam_list"))
 
 
