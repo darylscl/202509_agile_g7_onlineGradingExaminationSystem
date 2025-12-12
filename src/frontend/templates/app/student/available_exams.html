@@ -4,7 +4,7 @@
 
 {% block content %}
 
-<div class="d-flex justify-content-between align-items-center mb-4 mt-0">
+<div class="d-flex justify-content-between align-items-center mb-4 mt-0 container">
     <h2 class="fw-bold mb-0 text-white">Available Exams</h2>
     <p class="text-muted small">
 </p>
@@ -13,13 +13,15 @@
 
 
 <!-- Info banner -->
+<div class="container">
 <div class="alert alert-info shadow-sm" role="alert">
     <strong>Note:</strong> Only exams that are currently within their scheduled start and end times
     are listed here. Once you begin an exam, make sure you have enough time to finish.
 </div>
+</div>
 
 <!-- Search Bar -->
-<div class="card shadow-sm mb-3">
+<div class="card shadow-sm mb-3 container">
     <div class="card-body">
         <input id="searchInput" type="text" class="form-control"
                placeholder="Search exam by ID or title...">
@@ -27,11 +29,11 @@
 </div>
 
 <!-- Exams Table -->
-<div class="card shadow-sm">
+<div class="card shadow-sm container">
     <div class="card-body p-0">
 
         <table id="examTable" class="table table-hover table-borderless align-middle mb-0">
-            <t  style="background: #1b263b; color: #fff;">
+            <thead  style="background: #1b263b; color: #fff;">
                 <tr>
                     <th>ID</th>
                     <th>Title</th>

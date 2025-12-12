@@ -1,53 +1,108 @@
 {% extends "base.html" %}
 {% load exam_extras %}
 {% block content %}
-<h2>Submission: {{ attempt.attempt_id }} ({{ attempt.student.username }})</h2>
-<form method="post">
-    {% csrf_token %}
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Question</th>
-                <th>Student Answer</th>
-                <th>Marks</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for answer in answers %}
-            <tr>
-                <td>{{ answer.question.question_text }}</td>
-            <td>
-                {% if answer.question.question_type == "MCQ" %}
-                    {% if answer.selected_choice %}
-                        {{ answer.selected_choice.choice_text }}
-                    {% else %}
-                        No answer
-                    {% endif %}
-                {% else %}
-                    {{ answer.text_answer|default:"No answer" }}
-                {% endif %}
-            </td>
-            <td>{{ answer.question.marks }}</td>
-            <td>
-                {% if answer.marks is not None %}
-                    {{ answer.marks }}
-                {% else %}
-                    <span class="text-muted">Pending</span>
-                {% endif %}
-            </td>
-            <td>
-                <input type="number" name="mark_{{ answer.id }}" value="{{ answer.marks|default:0 }}" step="0.01" min="0" class="form-control" />
-            </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    <div>
-        <strong>Total:</strong> {{ total_awarded|default:0 }} / {{ total_possible|default:0 }} marks
-        {% if total_possible %}
-        ({{ total_awarded|floatformat:2 }} / {{ total_possible|floatformat:2 }})
+
+<div class="d-flex justify-content-between align-items-center mb-4 container">
+    <h2 class="fw-bold mb-0 mt-5 text-white">Submission: {{ attempt.attempt_id }} ({% if attempt.student.full_name %}{{ attempt.student.full_name }}{% else %}{{ attempt.student.student_ID }}{% endif %})</h2>
+</div>
+
+{% if messages %}
+<div id="page-messages" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:1200;display:flex;flex-direction:column;gap:10px;align-items:center;">
+    {% for message in messages %}
+        {% if message.tags == 'error' %}
+            <div class="alert alert-danger mb-0" role="alert" style="min-width:320px;box-shadow:0 6px 18px rgba(0,0,0,0.12);">
+                {{ message }}
+            </div>
+        {% else %}
+            <div class="alert alert-{{ message.tags }} mb-0" role="alert" style="min-width:320px;box-shadow:0 6px 18px rgba(0,0,0,0.12);">
+                {{ message }}
+            </div>
         {% endif %}
+    {% endfor %}
+</div>
+
+<script>
+    // Auto-hide page messages after 4 seconds
+    document.addEventListener('DOMContentLoaded', function () {
+        const container = document.getElementById('page-messages');
+        if (!container) return;
+        setTimeout(() => {
+            // fade out then remove
+            container.style.transition = 'opacity 0.5s ease';
+            container.style.opacity = '0';
+            setTimeout(() => container.remove(), 600);
+        }, 4000);
+    });
+</script>
+{% endif %}
+
+<div class="card shadow-sm container">
+    <div class="card-body p-0">
+        <form method="post" class="p-3">
+            {% csrf_token %}
+
+            <div class="table-responsive">
+                <table class="table table-hover table-borderless align-middle mb-0">
+                    <thead style="background: #1b263b; color: #fff;">
+                        <tr>
+                            <th>Question</th>
+                            <th>Student Answer</th>
+                            <th>Marks</th>
+                            <th>Awarded</th>
+                            <th>Marks to be awarded</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for answer in answers %}
+                        <tr>
+                            <td>{{ answer.question.question_text }}</td>
+                            <td>
+                                {% if answer.question.question_type == "MCQ" %}
+                                    {% if answer.selected_choice %}
+                                        {{ answer.selected_choice.choice_text }}
+                                    {% else %}
+                                        No answer
+                                    {% endif %}
+                                {% else %}
+                                    {{ answer.text_answer|default:"No answer" }}
+                                {% endif %}
+                            </td>
+                            <td>{{ answer.question.marks }}</td>
+                            <td>
+                                {% if answer.marks is not None %}
+                                    {{ answer.marks }}
+                                {% else %}
+                                    <span class="text-muted">Pending</span>
+                                {% endif %}
+                            </td>
+                                {% if user_type == 'instructor' %}
+                                <td>
+                                    <input type="number" name="mark_{{ answer.id }}" value="{{ answer.marks|default:0 }}" step="0.5" min="0" max="{{ answer.question.marks }}" class="form-control" />
+                                </td>
+                                {% else %}
+                                <td><span class="text-muted">—</span></td>
+                                {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mt-3">
+                <div>
+                    <strong>Total:</strong> {{ total_awarded|default:0 }} / {{ total_possible|default:0 }} marks
+                    {% if total_possible %}
+                    ({{ total_awarded|floatformat:2 }} / {{ total_possible|floatformat:2 }})
+                    {% endif %}
+                </div>
+
+                {% if user_type == 'instructor' %}
+                <button type="submit" class="btn btn-success">Save Marks</button>
+                {% endif %}
+            </div>
+        </form>
     </div>
-    <button type="submit" class="btn btn-success">Save Marks</button>
-</form>
+</div>
+
 {% endblock %}

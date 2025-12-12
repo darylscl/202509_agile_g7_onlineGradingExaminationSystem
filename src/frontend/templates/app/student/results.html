@@ -3,7 +3,8 @@
 {% block content %}
 <div class="container mt-0">
     <h2 class="fw-bold mb-4 text-white">My Exam Results</h2>
-    {% if attempts %}
+    {# Unified table: render awaiting rows first (N/A), then completed rows #}
+    {% if awaiting_attempts or completed_attempts %}
         <table class="table table-hover">
             <thead>
                 <tr>
@@ -14,10 +15,30 @@
                 </tr>
             </thead>
             <tbody>
-                {% for attempt in attempts %}
+                {# awaiting rows (show N/A) #}
+                {% for attempt in awaiting_attempts %}
                 <tr>
                     <td>{{ attempt.exam.title }}</td>
-                    <td>{{ attempt.score }}/{{ attempt.total_possible }} <span class="badge bg-info text-dark ms-2">{{ attempt.grade }}</span> <span class="badge ms-2 {% if attempt.status == 'Pass' %}bg-success{% else %}bg-danger{% endif %}">{{ attempt.status }}</span></td>
+                    <td>
+                        N/A <span class="badge bg-info text-dark ms-2">{{ attempt.grade }}</span>
+                        <span class="badge bg-warning text-dark ms-2">{{ attempt.status }}</span>
+                    </td>
+                    <td>{{ attempt.submitted_at|date:"Y-m-d H:i:s" }}</td>
+                    <td>
+                        <a href="{% url 'student_exam_result' attempt.attempt_id %}" class="btn btn-sm btn-primary">View</a>
+                    </td>
+                </tr>
+                {% endfor %}
+
+                {# completed rows #}
+                {% for attempt in completed_attempts %}
+                <tr>
+                    <td>{{ attempt.exam.title }}</td>
+                    <td>
+                        {{ attempt.score }}/{{ attempt.total_possible }}
+                        <span class="badge bg-info text-dark ms-2">{{ attempt.grade }}</span>
+                        <span class="badge ms-2 {% if attempt.status == 'Pass' %}bg-success{% else %}bg-danger{% endif %}">{{ attempt.status }}</span>
+                    </td>
                     <td>{{ attempt.submitted_at|date:"Y-m-d H:i:s" }}</td>
                     <td>
                         <a href="{% url 'student_exam_result' attempt.attempt_id %}" class="btn btn-sm btn-primary">View</a>

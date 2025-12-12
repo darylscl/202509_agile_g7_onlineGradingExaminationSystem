@@ -500,24 +500,51 @@ def exam_submissions(request, exam_id):
 def view_submission(request, attempt_id):
     attempt = get_object_or_404(ExamAttempt, attempt_id=attempt_id)
     answers = attempt.answers.select_related("question", "selected_choice")
+    user_type = request.session.get("user_type")
     # Calculate totals for template
     total_possible = sum([a.question.marks or 0 for a in answers])
     total_awarded = sum([a.marks or 0 for a in answers])
     if request.method == "POST":
-        # Example: update marks for each answer
+        # Only instructors may update marks
+        if user_type != "instructor":
+            messages.error(request, "Only instructors can update marks.")
+            return redirect('instructor_view_submission', attempt_id=attempt.attempt_id)
+        # Update marks for each answer with validation (marks cannot exceed question.marks)
+        errors = False
         for answer in answers:
             mark = request.POST.get(f"mark_{answer.id}")
-            if mark is not None:
-                answer.marks = float(mark)
-                answer.save()
-        # Optionally, update total score
-        attempt.score = sum(a.marks or 0 for a in answers)
-        attempt.save()
+            if mark is not None and mark != "":
+                try:
+                    mark_val = float(mark)
+                except ValueError:
+                    messages.error(request, f"Invalid mark for question {answer.question.order_no}.")
+                    errors = True
+                    break
+
+                max_mark = answer.question.marks or 0
+                if mark_val > max_mark:
+                    messages.error(request, f"Marks for question {answer.question.order_no} cannot exceed {max_mark}.")
+                    errors = True
+                elif mark_val < 0:
+                    messages.error(request, f"Marks for question {answer.question.order_no} cannot be negative.")
+                    errors = True
+                else:
+                    answer.marks = mark_val
+                    answer.save()
+
+        if not errors:
+            # Optionally, update total score
+            attempt.score = sum(a.marks or 0 for a in answers)
+            attempt.save()
+            messages.success(request, "Marks saved successfully.")
+            # Post-Redirect-Get: redirect back to the same page so messages are displayed here
+            return redirect('instructor_view_submission', attempt_id=attempt.attempt_id)
     return render(request, "app/instructor/view_submission.html", {
         "attempt": attempt,
         "answers": answers,
         "total_possible": total_possible,
         "total_awarded": total_awarded,
+        "user_type": user_type,
     })
 
 def exam_list(request):
@@ -926,12 +953,14 @@ def take_exam(request, exam_id):
                     defaults={"text_answer": text_value},
                 )
                 answer.text_answer = text_value
-                answer.marks = answer.marks or 0
+                # Leave text answers ungraded until instructor reviews them.
+                answer.marks = None
                 answer.selected_choice = None
                 answer.save()
                 
         attempt.submitted_at = timezone.now()
-        attempt.score = total_score if max_score == 0 else total_score
+        # Store auto-graded MCQ score only; text answers remain ungraded (marks=None)
+        attempt.score = total_score
         attempt.save()
         return redirect("student_exam_result", attempt_id=attempt.attempt_id)
     
@@ -949,11 +978,80 @@ def student_results(request):
     student = Student.objects.get(student_ID=student_id)
     attempts = ExamAttempt.objects.filter(student=student, submitted_at__isnull=False).select_related("exam").order_by("-submitted_at")
     # Prepare extra info for each attempt: total_possible and grade
-    attempt_list = []
+    awaiting_attempts = []
+    completed_attempts = []
     for attempt in attempts:
         answers = attempt.answers.select_related("question", "selected_choice")
         total_possible = sum([a.question.marks or 0 for a in answers])
         total_awarded = sum([a.marks or 0 for a in answers])
+
+        # Detect ungraded text answers so we can mark the attempt as awaiting grading
+        has_ungraded_text = any(
+            (a.question.question_type != "MCQ") and (a.marks is None) for a in answers
+        )
+
+        if has_ungraded_text:
+            grade = "N/A"
+            status = "Awaiting Grading"
+            percentage = None
+        else:
+            if total_possible > 0:
+                percent = total_awarded / total_possible
+                if percent >= 0.9:
+                    grade = "A"
+                elif percent >= 0.8:
+                    grade = "B"
+                elif percent >= 0.7:
+                    grade = "C"
+                elif percent >= 0.6:
+                    grade = "D"
+                else:
+                    grade = "F"
+                status = "Pass" if percent >= 0.5 else "Fail"
+                percentage = percent * 100
+            else:
+                grade = "N/A"
+                status = "N/A"
+                percentage = None
+        row = {
+            "exam": attempt.exam,
+            "score": attempt.score,
+            "submitted_at": attempt.submitted_at,
+            "attempt_id": attempt.attempt_id,
+            "total_possible": total_possible,
+            "grade": grade,
+            "status": status,
+            "percentage": percentage,
+        }
+        if status == "Awaiting Grading":
+            awaiting_attempts.append(row)
+        else:
+            completed_attempts.append(row)
+
+    return render(request, "app/student/results.html", {"awaiting_attempts": awaiting_attempts, "completed_attempts": completed_attempts})
+
+def exam_result(request, attempt_id):
+    student_id = request.session.get("user_id")
+    student = Student.objects.get(student_ID=student_id)
+    attempt = get_object_or_404(ExamAttempt, attempt_id=attempt_id, student=student)
+    answers = attempt.answers.select_related("question", "selected_choice")
+    # Calculate total possible marks
+    total_possible = sum([a.question.marks for a in answers])
+    # Calculate total awarded marks (only counted where marks exist)
+    total_awarded = sum([a.marks for a in answers if a.marks is not None])
+
+    # Detect if any text answers are still ungraded
+    has_ungraded_text = any(
+        (a.question.question_type != "MCQ") and (a.marks is None) for a in answers
+    )
+
+    if has_ungraded_text:
+        # If instructor hasn't graded text answers yet, show Awaiting Grading
+        status = "Awaiting Grading"
+        grade = "N/A"
+        percentage = None
+    else:
+        # Grade calculation (example: A/B/C/D/F)
         if total_possible > 0:
             percent = total_awarded / total_possible
             if percent >= 0.9:
@@ -967,48 +1065,24 @@ def student_results(request):
             else:
                 grade = "F"
             status = "Pass" if percent >= 0.5 else "Fail"
+            percentage = percent * 100
         else:
             grade = "N/A"
             status = "N/A"
-        attempt_list.append({
-            "exam": attempt.exam,
-            "score": attempt.score,
-            "submitted_at": attempt.submitted_at,
-            "attempt_id": attempt.attempt_id,
-            "total_possible": total_possible,
-            "grade": grade,
-            "status": status,
-        })
-    return render(request, "app/student/results.html", {"attempts": attempt_list})
+            percentage = None
 
-def exam_result(request, attempt_id):
-    student_id = request.session.get("user_id")
-    student = Student.objects.get(student_ID=student_id)
-    attempt = get_object_or_404(ExamAttempt, attempt_id=attempt_id, student=student)
-    answers = attempt.answers.select_related("question", "selected_choice")
-    # Calculate total possible marks
-    total_possible = sum([a.question.marks for a in answers])
-    # Calculate total awarded marks
-    total_awarded = sum([a.marks for a in answers if a.marks is not None])
-    # Grade calculation (example: A/B/C/D/F)
-    if total_possible > 0:
-        percent = total_awarded / total_possible
-        if percent >= 0.9:
-            grade = "A"
-        elif percent >= 0.8:
-            grade = "B"
-        elif percent >= 0.7:
-            grade = "C"
-        elif percent >= 0.6:
-            grade = "D"
-        else:
-            grade = "F"
-    else:
-        grade = "N/A"
     return render(
         request,
         "app/student/exam_result.html",
-        {"attempt": attempt, "answers": answers, "total_possible": total_possible, "total_awarded": total_awarded, "grade": grade},
+        {
+            "attempt": attempt,
+            "answers": answers,
+            "total_possible": total_possible,
+            "total_awarded": total_awarded,
+            "grade": grade,
+            "percentage": percentage,
+            "status": status,
+        },
     )
 
 def normalize_phone(raw: str) -> str:
