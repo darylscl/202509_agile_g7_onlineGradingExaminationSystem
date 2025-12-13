@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}Results Dashboard{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold text-white mb-0">Results Dashboard</h2>
+    </div>
+
+    <div class="card shadow-sm p-4 mb-4">
+        <form method="get" id="filterForm" class="row g-3">
+            <div class="col-md-6">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="filter_by_exam" name="filter_by_exam" {% if selected_student_id %}{% else %}checked{% endif %}>
+                    <label class="form-check-label text-dark" for="filter_by_exam">Filter by Exam</label>
+                </div>
+                <select id="select_exam" name="exam_id" class="form-select" {% if not selected_exam_id %}disabled{% endif %}>
+                    <option value="">-- Choose exam --</option>
+                    {% for ex in exams %}
+                        <option value="{{ ex.exam_id }}" {% if ex.exam_id == selected_exam_id %}selected{% endif %}>{{ ex.exam_id }} — {{ ex.title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-6">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="filter_by_student" name="filter_by_student" {% if selected_student_id %}checked{% endif %}>
+                    <label class="form-check-label text-dark" for="filter_by_student">Filter by Student</label>
+                </div>
+                <select id="select_student" name="student_id" class="form-select" {% if not selected_student_id %}disabled{% endif %}>
+                    <option value="">-- Choose student --</option>
+                    {% for s in students %}
+                        <option value="{{ s.student_ID }}" {% if s.student_ID == selected_student_id %}selected{% endif %}>{{ s.full_name }} ({{ s.student_ID }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Show</button>
+            </div>
+        </form>
+    </div>
+
+    {% if chart_json %}
+    <div class="card shadow-sm p-4 mb-4">
+        <h5 class="mb-3">Performance Trend</h5>
+        <canvas id="resultsChart" height="120"></canvas>
+    </div>
+    {% endif %}
+
+    {% if bar_chart_json %}
+    <div class="card shadow-sm p-4 mb-4">
+        <h5 class="mb-3">Grade Distribution</h5>
+        <canvas id="barChart" height="120"></canvas>
+    </div>
+    {% endif %}
+
+    {% if table_attempts %}
+    <div class="card shadow-sm p-4">
+        <h5 class="mb-3">Submissions</h5>
+        <div class="table-responsive">
+            <table class="table table-hover table-borderless align-middle mb-0">
+                <thead style="background: #1b263b; color: #fff;">
+                    <tr>
+                        <th>Attempt</th>
+                        <th>Student / Exam</th>
+                        <th>Submitted At</th>
+                        <th>Score</th>
+                        <th>Percent</th>
+                        <th>View</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if selected_exam_id %}
+                        {% for att in table_attempts %}
+                        <tr>
+                            <td>{{ att.attempt_id }}</td>
+                            <td>{{ att.student.full_name }}</td>
+                            <td>{{ att.submitted_at|date:"Y-m-d H:i" }}</td>
+                            <td>{% if att.score is not None %}{{ att.score|floatformat:2 }}{% else %}-{% endif %}</td>
+                            <td>{% if att.score is not_none and att.score is not None %}--{% else %}-{% endif %}</td>
+                            <td><a class="btn btn-sm btn-info" href="{% url 'instructor_view_submission' att.attempt_id %}">View</a></td>
+                        </tr>
+                        {% endfor %}
+                    {% elif selected_student_id %}
+                        {% for row in table_attempts %}
+                        <tr>
+                            <td>{{ row.attempt.attempt_id }}</td>
+                            <td>{{ row.attempt.exam.title }} ({{ row.attempt.exam.exam_id }})</td>
+                            <td>{{ row.attempt.submitted_at|date:"Y-m-d H:i" }}</td>
+                            <td>{% if row.attempt.score is not None %}{{ row.attempt.score|floatformat:2 }}{% else %}-{% endif %}</td>
+                            <td>{% if row.percent is not None %}{{ row.percent|floatformat:1 }}%{% else %}-{% endif %}</td>
+                            <td><a class="btn btn-sm btn-info" href="{% url 'instructor_view_submission' row.attempt.attempt_id %}">View</a></td>
+                        </tr>
+                        {% endfor %}
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% if chart_json %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function(){
+    const cfg = {{ chart_json|safe }};
+    const ctx = document.getElementById('resultsChart').getContext('2d');
+
+    if(cfg.type === 'bar'){
+        new Chart(ctx, {
+            type: 'bar',
+            data: { labels: cfg.labels, datasets: [{ label: 'Students', data: cfg.data, backgroundColor: 'rgba(54,162,235,0.7)'}] },
+            options: { scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }
+        });
+    } else if(cfg.type === 'line'){
+        new Chart(ctx, {
+            type: 'line',
+            data: { labels: cfg.labels, datasets: [{ label: 'Percent', data: cfg.data, borderColor: 'rgba(75,192,192,1)', fill:false }] },
+            options: { scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } }
+        });
+    }
+})();
+</script>
+{% endif %}
+
+{% if bar_chart_json %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function(){
+    const barCfg = {{ bar_chart_json|safe }};
+    const barCtx = document.getElementById('barChart').getContext('2d');
+    new Chart(barCtx, {
+        type: 'bar',
+        data: { labels: barCfg.labels, datasets: [{ label: 'Grade Count', data: barCfg.data, backgroundColor: 'rgba(255,99,132,0.7)'}] },
+        options: { scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }
+    });
+})();
+</script>
+{% endif %}
+<script>
+// Enforce only one filter (exam or student) can be chosen at a time using checkboxes controlling dropdowns
+;(function(){
+    const examCheck = document.getElementById('filter_by_exam');
+    const studentCheck = document.getElementById('filter_by_student');
+    const examSel = document.getElementById('select_exam');
+    const studentSel = document.getElementById('select_student');
+    const form = document.getElementById('filterForm');
+
+    if(!form) return;
+
+    function updateState(){
+            if(examCheck && examCheck.checked){
+                // enable exam select, disable student select and uncheck student checkbox
+                if(examSel) examSel.disabled = false;
+                if(studentSel) { studentSel.disabled = true; studentSel.value = ''; }
+                if(studentCheck) studentCheck.checked = false;
+            } else if(studentCheck && studentCheck.checked){
+                // enable student select, disable exam select and uncheck exam checkbox
+                if(studentSel) studentSel.disabled = false;
+                if(examSel) { examSel.disabled = true; examSel.value = ''; }
+                if(examCheck) examCheck.checked = false;
+            } else {
+                // none checked -> both enabled
+                if(examSel) examSel.disabled = false;
+                if(studentSel) studentSel.disabled = false;
+            }
+    }
+
+    if(examCheck) examCheck.addEventListener('change', function(){
+        // When exam is toggled, just update state; do not force-uncheck student here
+        updateState();
+    });
+
+    if(studentCheck) studentCheck.addEventListener('change', function(){
+        // If student is checked by the user, prefer student: uncheck exam
+        if(this.checked && examCheck){
+            examCheck.checked = false;
+        }
+        updateState();
+    });
+
+    // Defensive submit: ensure only one param is sent
+    form.addEventListener('submit', function(){
+        if(examCheck && examCheck.checked){
+            // clear student param
+            if(studentSel) studentSel.value = '';
+        } else if(studentCheck && studentCheck.checked){
+            if(examSel) examSel.value = '';
+        } else {
+            // nothing selected: prevent empty submit? allow to show selectors only
+        }
+    });
+
+    // initialize on page load
+    updateState();
+
+    // Clear button handler
+    const clearBtn = document.getElementById('clearFilters');
+    if(clearBtn){
+        clearBtn.addEventListener('click', function(){
+            if(examCheck) { examCheck.checked = false; }
+            if(studentCheck) { studentCheck.checked = false; }
+            if(examSel) { examSel.value = ''; examSel.disabled = false; }
+            if(studentSel) { studentSel.value = ''; studentSel.disabled = false; }
+            updateState();
+        });
+    }
+})();
+</script>
+
+{% endblock %}
