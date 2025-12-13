@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-
+{% load tz %}
 {% block title %}Exam List{% endblock %}
 
 {% block content %}
@@ -47,8 +47,8 @@
                         </span>
                     </td>
 
-                    <td>{{ exam.start_time|date:"Y-m-d H:i" }}</td>
-                    <td>{{ exam.end_time|date:"Y-m-d H:i" }}</td>
+                    <td>{{ exam.start_time|timezone:"Asia/Kuala_Lumpur"|date:"Y-m-d H:i" }}</td>
+                    <td>{{ exam.end_time|timezone:"Asia/Kuala_Lumpur"|date:"Y-m-d H:i" }}</td>
 
                     <td class="text-center">
                         <!-- View/Edit -->
