@@ -1423,7 +1423,8 @@ def is_valid_my_phone(phone: str) -> bool:
         return phone.isdigit() and (10 <= len(phone) <= 11) and phone.startswith("01")
     return False
 
-MATRIC_RE = re.compile(r"^[A-Za-z0-9]{6,15}$")def normalize_phone(raw: str) -> str:
+MATRIC_RE = re.compile(r"^[A-Za-z0-9]{6,15}$")
+def normalize_phone(raw: str) -> str:
     if not raw:
         return ""
     # remove spaces, dashes, parentheses
