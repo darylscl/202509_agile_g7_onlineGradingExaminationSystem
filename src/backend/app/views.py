@@ -704,34 +704,66 @@ def grade_distribution(request, exam_id):
     attempts = ExamAttempt.objects.filter(exam=exam, submitted_at__isnull=False).values_list("score", flat=True)
     scores = [s for s in attempts if s is not None]
 
-    # Prepare 10 buckets (0-9,10-19,...,90-100)
-    buckets = [0] * 10
+    # Prepare grade buckets for A/B/C/D/F
+    grade_labels = ["A (90-100)", "B (80-89)", "C (70-79)", "D (60-69)", "F (<60)"]
+    grade_buckets = [0] * 5
     for s in scores:
         try:
             val = float(s)
         except Exception:
             continue
-        idx = min(int(val) // 10, 9)
-        buckets[idx] += 1
+        # Calculate percent based on total possible marks
+        total_possible = sum((float(q.marks or 0) for q in exam.questions.all()))
+        pct = (val / total_possible) * 100 if total_possible > 0 else 0
+        if pct >= 90:
+            grade_buckets[0] += 1
+        elif pct >= 80:
+            grade_buckets[1] += 1
+        elif pct >= 70:
+            grade_buckets[2] += 1
+        elif pct >= 60:
+            grade_buckets[3] += 1
+        else:
+            grade_buckets[4] += 1
 
-    labels = [
-        "0-9", "10-19", "20-29", "30-39", "40-49",
-        "50-59", "60-69", "70-79", "80-89", "90-100",
-    ]
-
-    avg = None
-    if scores:
-        avg = sum(scores) / len(scores)
-
-    context = {
-        "exam": exam,
-        "labels_json": json.dumps(labels),
-        "counts_json": json.dumps(buckets),
-        "total_submissions": len(scores),
-        "avg_score": avg,
+    chart = {
+        'type': 'bar',
+        'labels': grade_labels,
+        'data': grade_buckets,
+        'title': f"Grade Distribution — {exam.title}",
     }
 
-    return render(request, "app/instructor/grade_distribution.html", context)
+    table_attempts = ExamAttempt.objects.filter(exam=exam, submitted_at__isnull=False).select_related('student').order_by('-submitted_at')
+
+    # Calculate total possible marks for the exam (sum of question marks)
+    total_possible = 0
+    qs = exam.questions.all()
+    for q in qs:
+        try:
+            total_possible += float(q.marks or 0)
+        except Exception:
+            continue
+
+    # Build attempts data with computed percentage to simplify template logic
+    attempts_data = []
+    for a in attempts:
+        pct = None
+        try:
+            if a.score is not None and total_possible and total_possible > 0:
+                pct = (float(a.score) / float(total_possible)) * 100
+        except Exception:
+            pct = None
+
+        attempts_data.append({
+            "attempt": a,
+            "percent": pct,
+        })
+
+    return render(request, "app/instructor/exam_submissions.html", {
+        "exam": exam,
+        "attempts_data": attempts_data,
+        "total_possible": total_possible,
+    })
 
 
 @instructor_required
@@ -811,34 +843,59 @@ def instructor_results(request):
     chart = None
     table_attempts = None
 
-    # If exam selected -> show distribution (reuse grade_distribution logic)
+    # If exam selected -> show grade distribution (A/B/C/D/F)
     if selected_exam_id:
         exam = get_object_or_404(Exam, exam_id=selected_exam_id, created_by=instructor)
-        attempts = ExamAttempt.objects.filter(exam=exam, submitted_at__isnull=False).values_list('score', flat=True)
-        scores = [s for s in attempts if s is not None]
-
-        buckets = [0] * 10
-        for s in scores:
-            try:
-                val = float(s)
-            except Exception:
-                continue
-            idx = min(int(val) // 10, 9)
-            buckets[idx] += 1
-
-        labels = [
-            "0-9","10-19","20-29","30-39","40-49",
-            "50-59","60-69","70-79","80-89","90-100",
-        ]
-
+        attempts_qs = ExamAttempt.objects.filter(exam=exam, submitted_at__isnull=False).select_related('student').order_by('-submitted_at')
+        
+        # Calculate total possible marks for the exam
+        total_possible = sum(float(q.marks or 0) for q in exam.questions.all())
+        
+        # Prepare grade buckets
+        grade_labels = ["A (90-100)", "B (80-89)", "C (70-79)", "D (60-69)", "F (<60)"]
+        grade_counts = [0, 0, 0, 0, 0]
+        table_attempts = []
+        
+        for att in attempts_qs:
+            percent = None
+            if att.score is not None and total_possible > 0:
+                try:
+                    percent = (float(att.score) / float(total_possible)) * 100
+                except Exception:
+                    percent = None
+            # Assign grade
+            grade = None
+            if percent is not None:
+                if percent >= 90:
+                    grade = "A"
+                    grade_counts[0] += 1
+                elif percent >= 80:
+                    grade = "B"
+                    grade_counts[1] += 1
+                elif percent >= 70:
+                    grade = "C"
+                    grade_counts[2] += 1
+                elif percent >= 60:
+                    grade = "D"
+                    grade_counts[3] += 1
+                else:
+                    grade = "F"
+                    grade_counts[4] += 1
+            table_attempts.append({
+                'attempt_id': att.attempt_id,
+                'student': att.student,
+                'submitted_at': att.submitted_at,
+                'score': att.score,
+                'percent': percent,
+                'grade': grade,
+            })
         chart = {
             'type': 'bar',
-            'labels': labels,
-            'data': buckets,
-            'title': f"Distribution — {exam.title}",
+            'labels': grade_labels,
+            'data': grade_counts,
+            'title': f"Grade Distribution — {exam.title}",
         }
 
-        table_attempts = ExamAttempt.objects.filter(exam=exam, submitted_at__isnull=False).select_related('student').order_by('-submitted_at')
 
     # If student selected -> show student's attempts across this instructor's exams
     if selected_student_id:
@@ -849,10 +906,13 @@ def instructor_results(request):
             .select_related('exam')
             .order_by('submitted_at')
         )
-
+    
         labels = []
         percents = []
         rows = []
+        # For bar chart: grade distribution
+        grade_labels = ["A (90-100)", "B (80-89)", "C (70-79)", "D (60-69)", "F (<60)"]
+        grade_counts = [0, 0, 0, 0, 0]
         for a in attempts_qs:
             total_possible = sum((float(q.marks or 0) for q in a.exam.questions.all()))
             pct = None
@@ -861,23 +921,46 @@ def instructor_results(request):
                     pct = (float(a.score) / float(total_possible)) * 100
                 except Exception:
                     pct = None
+            if pct is not None:
+                if pct >= 90:
+                    grade = "A"
+                    grade_counts[0] += 1
+                elif pct >= 80:
+                    grade = "B"
+                    grade_counts[1] += 1
+                elif pct >= 70:
+                    grade = "C"
+                    grade_counts[2] += 1
+                elif pct >= 60:
+                    grade = "D"
+                    grade_counts[3] += 1
+                else:
+                    grade = "F"
+                    grade_counts[4] += 1
             labels.append(f"{a.exam.exam_id} - {a.exam.title}")
             percents.append(pct if pct is not None else 0)
-            rows.append({'attempt': a, 'total_possible': total_possible, 'percent': pct})
-
+            rows.append({'attempt': a, 'total_possible': total_possible, 'percent': pct, 'grade': grade})
+    
         chart = {
             'type': 'line',
             'labels': labels,
             'data': percents,
             'title': f"Performance — {student.full_name}",
         }
-
+    
+        bar_chart = {
+            'type': 'bar',
+            'labels': grade_labels,
+            'data': grade_counts,
+            'title': f"Grade Distribution — {student.full_name}",
+        }
         table_attempts = rows
-
+    
     context = {
         'exams': exams,
         'students': student_qs,
         'chart_json': json.dumps(chart) if chart else None,
+        'bar_chart_json': json.dumps(bar_chart) if selected_student_id else None,
         'table_attempts': table_attempts,
         'selected_exam_id': selected_exam_id,
         'selected_student_id': selected_student_id,

@@ -44,8 +44,15 @@
 
     {% if chart_json %}
     <div class="card shadow-sm p-4 mb-4">
-        <h5 class="mb-3">Chart</h5>
+        <h5 class="mb-3">Performance Trend</h5>
         <canvas id="resultsChart" height="120"></canvas>
+    </div>
+    {% endif %}
+
+    {% if bar_chart_json %}
+    <div class="card shadow-sm p-4 mb-4">
+        <h5 class="mb-3">Grade Distribution</h5>
+        <canvas id="barChart" height="120"></canvas>
     </div>
     {% endif %}
 
@@ -119,6 +126,20 @@
 </script>
 {% endif %}
 
+{% if bar_chart_json %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function(){
+    const barCfg = {{ bar_chart_json|safe }};
+    const barCtx = document.getElementById('barChart').getContext('2d');
+    new Chart(barCtx, {
+        type: 'bar',
+        data: { labels: barCfg.labels, datasets: [{ label: 'Grade Count', data: barCfg.data, backgroundColor: 'rgba(255,99,132,0.7)'}] },
+        options: { scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }
+    });
+})();
+</script>
+{% endif %}
 <script>
 // Enforce only one filter (exam or student) can be chosen at a time using checkboxes controlling dropdowns
 ;(function(){
