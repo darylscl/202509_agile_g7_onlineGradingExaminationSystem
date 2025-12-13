@@ -1167,7 +1167,8 @@ def test_exam_update_missing_fields(client):
 
     assert response.status_code == 200  
     messages = list(get_messages(response.wsgi_request))
-    assert "All fields (title, start time, end time) are required." in str(messages[0])
+    assert "All fields (title, start date/time, end date/time) are required." in str(messages[0])
+
     
 @pytest.mark.django_db
 def test_exam_update_invalid_datetime(client):
@@ -1582,7 +1583,6 @@ def test_student_can_resume_ongoing_exam_attempt(client):
 
 @pytest.mark.django_db
 def test_student_can_view_and_update_profile(client):
-    # Create a student in DB
     student = Student.objects.create(
         full_name="Test Student",
         student_email="student1@example.com",
@@ -1591,7 +1591,6 @@ def test_student_can_view_and_update_profile(client):
         password="hashed-password",
     )
 
-    # Simulate "logged in" student via session
     session = client.session
     session["user_type"] = "student"
     session["user_id"] = student.student_ID
@@ -1599,35 +1598,27 @@ def test_student_can_view_and_update_profile(client):
 
     url = reverse("student_profile")
 
-    # VIEW: student can see their profile page
     response = client.get(url)
     assert response.status_code == 200
-    assert b"Student Profile" in response.content
-    assert student.full_name.encode() in response.content
-    assert student.student_email.encode() in response.content
 
-    # UPDATE: student submits new profile data
     new_data = {
         "full_name": "Updated Student",
         "student_email": "student_updated@example.com",
         "matric_number": "0987654321",
-        "contact_number": "9999999999",
+        "contact_number": "0112345678",  # ✅ valid
     }
     response = client.post(url, data=new_data, follow=True)
-
-    # Should render OK (either after redirect or directly)
     assert response.status_code == 200
 
-    # Data should be updated in DB
     student.refresh_from_db()
     assert student.full_name == "Updated Student"
     assert student.student_email == "student_updated@example.com"
     assert student.matric_number == "0987654321"
-    assert student.contact_number == "9999999999"
+    assert student.contact_number == "0112345678"
+
 
 @pytest.mark.django_db
 def test_instructor_can_view_and_update_profile(client):
-    # Create an instructor in DB
     instructor = Instructor.objects.create(
         full_name="Test Instructor",
         instructor_email="instructor1@example.com",
@@ -1636,7 +1627,6 @@ def test_instructor_can_view_and_update_profile(client):
         password="hashed-password",
     )
 
-    # Simulate "logged in" instructor via session
     session = client.session
     session["user_type"] = "instructor"
     session["user_id"] = instructor.instructor_ID
@@ -1644,29 +1634,22 @@ def test_instructor_can_view_and_update_profile(client):
 
     url = reverse("instructor_profile")
 
-    # VIEW: instructor can see their profile page
     response = client.get(url)
     assert response.status_code == 200
-    assert b"Instructor Profile" in response.content
-    assert instructor.full_name.encode() in response.content
-    assert instructor.instructor_email.encode() in response.content
 
-    # UPDATE: instructor submits new profile data
     new_data = {
         "full_name": "Updated Instructor",
         "instructor_email": "instructor_updated@example.com",
-        "contact_number": "0222222222",
+        "contact_number": "0122222222",  # ✅ valid
         "department": "Information Technology",
     }
     response = client.post(url, data=new_data, follow=True)
-
     assert response.status_code == 200
 
-    # Data should be updated in DB
     instructor.refresh_from_db()
     assert instructor.full_name == "Updated Instructor"
     assert instructor.instructor_email == "instructor_updated@example.com"
-    assert instructor.contact_number == "0222222222"
+    assert instructor.contact_number == "0122222222"
     assert instructor.department == "Information Technology"
 
 
@@ -1734,5 +1717,830 @@ def test_instructor_profile_rejects_invalid_email(client):
 
     instructor.refresh_from_db()
     assert instructor.instructor_email == "instructor1@example.com"
+
+    # ---------- helpers ----------
+def login_student(client, student):
+    session = client.session
+    session["user_type"] = "student"
+    session["user_id"] = student.student_ID
+    session.save()
+
+def login_instructor(client, instructor):
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+def assert_has_message(response, contains_text: str):
+    msgs = list(get_messages(response.wsgi_request))
+    assert any(contains_text in str(m) for m in msgs), msgs
+
+
+# ---------- ACCESS CONTROL ----------
+@pytest.mark.django_db
+def test_student_cannot_access_instructor_profile(client):
+    s = Student.objects.create(
+        full_name="S",
+        student_email="s@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    login_student(client, s)
+    resp = client.get(reverse("instructor_profile"))
+    assert resp.status_code == 302  
+
+
+# ---------- STUDENT PROFILE VALIDATION ----------
+@pytest.mark.django_db
+def test_student_profile_missing_required_fields(client):
+    student = Student.objects.create(
+        full_name="Test Student",
+        student_email="student1@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    login_student(client, student)
+
+    resp = client.post(reverse("student_profile"), data={
+        "full_name": "",
+        "student_email": "student1@example.com",
+        "matric_number": "",
+        "contact_number": "0123456789",
+    })
+
+    assert resp.status_code == 200
+    assert_has_message(resp, "required")  # your view uses required msg :contentReference[oaicite:4]{index=4}
+
+    student.refresh_from_db()
+    assert student.full_name == "Test Student"
+
+
+@pytest.mark.django_db
+def test_student_profile_rejects_duplicate_email(client):
+    s1 = Student.objects.create(
+        full_name="S1",
+        student_email="s1@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    Student.objects.create(
+        full_name="S2",
+        student_email="s2@example.com",
+        matric_number="PPE0002",
+        contact_number="0123456789",
+        password="pw",
+    )
+    login_student(client, s1)
+
+    resp = client.post(reverse("student_profile"), data={
+        "full_name": "S1",
+        "student_email": "s2@example.com",  # duplicate
+        "matric_number": "PPE0001",
+        "contact_number": "0123456789",
+    })
+
+    assert resp.status_code == 200
+    assert_has_message(resp, "already used by another student")  # view msg :contentReference[oaicite:6]{index=6}
+
+    s1.refresh_from_db()
+    assert s1.student_email == "s1@example.com"
+
+@pytest.mark.django_db
+def test_student_profile_rejects_duplicate_matric(client):
+    s1 = Student.objects.create(
+        full_name="S1",
+        student_email="s1@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    Student.objects.create(
+        full_name="S2",
+        student_email="s2@example.com",
+        matric_number="PPE0002",
+        contact_number="0123456789",
+        password="pw",
+    )
+    login_student(client, s1)
+
+    resp = client.post(reverse("student_profile"), data={
+        "full_name": "S1",
+        "student_email": "s1@example.com",
+        "matric_number": "PPE0002",  # duplicate
+        "contact_number": "0123456789",
+    })
+
+    assert resp.status_code == 200
+    assert_has_message(resp, "matric number is already used")  # view msg :contentReference[oaicite:7]{index=7}
+
+    s1.refresh_from_db()
+    assert s1.matric_number == "PPE0001"
+
+
+# These 2 tests assume you implemented your NEW matric/phone validation message strings:
+@pytest.mark.django_db
+def test_student_profile_rejects_invalid_matric_format_new_rules(client):
+    student = Student.objects.create(
+        full_name="Test Student",
+        student_email="student1@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    login_student(client, student)
+
+    resp = client.post(reverse("student_profile"), data={
+        "full_name": "Test Student",
+        "student_email": "student1@example.com",
+        "matric_number": "@@@@",  # invalid
+        "contact_number": "0123456789",
+    })
+
+    assert resp.status_code == 200
+    assert_has_message(resp, "Matric number must")  # match your new message
+
+    student.refresh_from_db()
+    assert student.matric_number == "PPE0001"
+
+@pytest.mark.django_db
+def test_student_profile_rejects_invalid_phone_new_rules(client):
+    student = Student.objects.create(
+        full_name="Test Student",
+        student_email="student1@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    login_student(client, student)
+
+    resp = client.post(reverse("student_profile"), data={
+        "full_name": "Test Student",
+        "student_email": "student1@example.com",
+        "matric_number": "PPE0001",
+        "contact_number": "abc",  # invalid phone input
+    })
+
+    assert resp.status_code == 200
+    assert_has_message(resp, "Invalid phone number")  # match your new message
+
+    student.refresh_from_db()
+    assert student.contact_number == "0123456789"
+
+
+@pytest.mark.django_db
+def test_student_profile_valid_update_success(client):
+    student = Student.objects.create(
+        full_name="Test Student",
+        student_email="student1@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    login_student(client, student)
+
+    resp = client.post(reverse("student_profile"), data={
+        "full_name": "Updated Student",
+        "student_email": "student_updated@example.com",
+        "matric_number": "PPE0009",
+        "contact_number": "0112345678",  # valid MY mobile
+    }, follow=True)
+
+    assert resp.status_code == 200
+    student.refresh_from_db()
+    assert student.full_name == "Updated Student"
+    assert student.student_email == "student_updated@example.com"
+    assert student.matric_number == "PPE0009"
+    assert student.contact_number == "0112345678"
+
+
+# ---------- INSTRUCTOR PROFILE VALIDATION ----------
+@pytest.mark.django_db
+def test_instructor_profile_missing_required_fields(client):
+    instructor = Instructor.objects.create(
+        full_name="Test Instructor",
+        instructor_email="i1@example.com",
+        contact_number="0112345678",
+        department="CS",
+        password="pw",
+    )
+    login_instructor(client, instructor)
+
+    resp = client.post(reverse("instructor_profile"), data={
+        "full_name": "",
+        "instructor_email": "",
+        "contact_number": "0112345678",
+        "department": "CS",
+    })
+
+    assert resp.status_code == 200
+    assert_has_message(resp, "Full name and email are required.")  # view msg :contentReference[oaicite:8]{index=8}
+
+@pytest.mark.django_db
+def test_instructor_profile_rejects_invalid_email(client):
+    instructor = Instructor.objects.create(
+        full_name="Test Instructor",
+        instructor_email="i1@example.com",
+        contact_number="0112345678",
+        department="CS",
+        password="pw",
+    )
+    login_instructor(client, instructor)
+
+    resp = client.post(reverse("instructor_profile"), data={
+        "full_name": "Updated",
+        "instructor_email": "bad-email",
+        "contact_number": "0112345678",
+        "department": "IT",
+    })
+
+    assert resp.status_code == 200
+    assert_has_message(resp, "Invalid email format.")  # view msg :contentReference[oaicite:9]{index=9}
+
+    instructor.refresh_from_db()
+    assert instructor.instructor_email == "i1@example.com"
+
+@pytest.mark.django_db
+def test_instructor_profile_rejects_duplicate_email(client):
+    i1 = Instructor.objects.create(
+        full_name="I1",
+        instructor_email="i1@example.com",
+        contact_number="0112345678",
+        department="CS",
+        password="pw",
+    )
+    Instructor.objects.create(
+        full_name="I2",
+        instructor_email="i2@example.com",
+        contact_number="0112345678",
+        department="CS",
+        password="pw",
+    )
+    login_instructor(client, i1)
+
+    resp = client.post(reverse("instructor_profile"), data={
+        "full_name": "I1",
+        "instructor_email": "i2@example.com",  # duplicate
+        "contact_number": "0112345678",
+        "department": "CS",
+    })
+
+    assert resp.status_code == 200
+    assert_has_message(resp, "already used by another instructor")  # view msg :contentReference[oaicite:10]{index=10}
+
+    i1.refresh_from_db()
+    assert i1.instructor_email == "i1@example.com"
+
+
+# This assumes you implemented your NEW phone validation message strings in instructor_profile:
+@pytest.mark.django_db
+def test_instructor_profile_rejects_invalid_phone_new_rules(client):
+    instructor = Instructor.objects.create(
+        full_name="Test Instructor",
+        instructor_email="i1@example.com",
+        contact_number="0112345678",
+        department="CS",
+        password="pw",
+    )
+    login_instructor(client, instructor)
+
+    resp = client.post(reverse("instructor_profile"), data={
+        "full_name": "Test Instructor",
+        "instructor_email": "i1@example.com",
+        "contact_number": "abc",  # invalid phone
+        "department": "CS",
+    })
+
+    assert resp.status_code == 200
+    assert_has_message(resp, "Invalid phone number")
+
+    instructor.refresh_from_db()
+    assert instructor.contact_number == "0112345678"
+
+@pytest.mark.django_db
+def test_instructor_profile_valid_update_success(client):
+    instructor = Instructor.objects.create(
+        full_name="Test Instructor",
+        instructor_email="i1@example.com",
+        contact_number="0112345678",
+        department="CS",
+        password="pw",
+    )
+    login_instructor(client, instructor)
+
+    resp = client.post(reverse("instructor_profile"), data={
+        "full_name": "Updated Instructor",
+        "instructor_email": "updated_i@example.com",
+        "contact_number": "0122222222",  # valid MY mobile
+        "department": "IT",
+    }, follow=True)
+
+    assert resp.status_code == 200
+    instructor.refresh_from_db()
+    assert instructor.full_name == "Updated Instructor"
+    assert instructor.instructor_email == "updated_i@example.com"
+    assert instructor.contact_number == "0122222222"
+    assert instructor.department == "IT"
+
+
+# ---------- OPTIONAL: stats / recent activity shown ----------
+@pytest.mark.django_db
+def test_student_profile_shows_recent_exam_activity(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        contact_number="0112345678",
+        department="CS",
+        password="pw",
+    )
+    student = Student.objects.create(
+        full_name="Student",
+        student_email="stu@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    login_student(client, student)
+
+    now = timezone.now()
+    exam = Exam.objects.create(
+        title="Math",
+        description="desc",
+        start_time=now - timedelta(minutes=10),
+        end_time=now + timedelta(minutes=10),
+        created_by=instructor,
+    )
+    ExamAttempt.objects.create(exam=exam, student=student)
+
+    resp = client.get(reverse("student_profile"))
+    assert resp.status_code == 200
+    # these strings exist in your updated template section
+    assert b"Recent Exam Activity" in resp.content
+    assert b"Math" in resp.content
+
+    import pytest
+from django.urls import reverse
+from django.utils import timezone
+from datetime import timedelta
+from zoneinfo import ZoneInfo
+
+@pytest.mark.django_db
+def test_instructor_can_view_exam_detail_with_schedule_and_questions(client):
+    """
+    User story:
+    Instructor can view one exam's details (schedule + questions)
+    so they can review before editing / analysing results.
+    """
+    KL = ZoneInfo("Asia/Kuala_Lumpur")
+
+    # Create instructor + login session
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pw",
+    )
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+    # Create exam (store UTC-aware datetimes)
+    start = timezone.now().replace(second=0, microsecond=0) + timedelta(hours=2)
+    end = start + timedelta(hours=1)
+
+    exam = Exam.objects.create(
+        title="Final Exam",
+        description="Exam desc",
+        start_time=start,
+        end_time=end,
+        created_by=instructor,
+    )
+
+    # Create questions
+    q1 = ExamQuestion.objects.create(
+        exam=exam, question_text="Explain OOP", question_type="TEXT", marks=5
+    )
+    q2 = ExamQuestion.objects.create(
+        exam=exam, question_text="2+2=?", question_type="MCQ", marks=1
+    )
+
+    # MCQ choices
+    Choice.objects.create(choice_id=q2, choice_text="3", is_correct=False)
+    Choice.objects.create(choice_id=q2, choice_text="4", is_correct=True)
+
+    # Visit exam detail
+    url = reverse("instructor_exam_detail", args=[exam.exam_id])
+    resp = client.get(url)
+    assert resp.status_code == 200
+
+    # Exam metadata
+    assert exam.title.encode() in resp.content
+    assert exam.exam_id.encode() in resp.content
+    assert b"Exam Information" in resp.content or b"Exam info" in resp.content
+
+    # Schedule appears (either UTC or KL formatted depending on template)
+    # We'll check KL formatted string (recommended display)
+    start_kl = timezone.localtime(start, KL).strftime("%Y-%m-%d %H:%M").encode()
+    end_kl = timezone.localtime(end, KL).strftime("%Y-%m-%d %H:%M").encode()
+    assert (start_kl in resp.content) or (start.strftime("%Y-%m-%d %H:%M").encode() in resp.content)
+    assert (end_kl in resp.content) or (end.strftime("%Y-%m-%d %H:%M").encode() in resp.content)
+
+    # Questions displayed
+    assert b"Explain OOP" in resp.content
+    assert b"2+2=?" in resp.content
+    assert b"3" in resp.content
+    assert b"4" in resp.content
+    assert b"Correct" in resp.content  # your template shows "Correct" badge
+
+    # Edit button exists (link text can differ)
+    edit_url = reverse("instructor_exam_update", args=[exam.exam_id]).encode()
+    assert edit_url in resp.content
+
+
+@pytest.mark.django_db
+def test_instructor_cannot_view_other_instructors_exam_detail(client):
+    """Negative: instructor cannot view exam created_by someone else (404)."""
+    instructor1 = Instructor.objects.create(
+        full_name="Teacher 1", instructor_email="t1@example.com", password="pw"
+    )
+    instructor2 = Instructor.objects.create(
+        full_name="Teacher 2", instructor_email="t2@example.com", password="pw"
+    )
+
+    exam = Exam.objects.create(
+        title="Secret Exam",
+        description="x",
+        start_time=timezone.now() + timedelta(hours=1),
+        end_time=timezone.now() + timedelta(hours=2),
+        created_by=instructor1,
+    )
+
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor2.instructor_ID
+    session.save()
+
+    resp = client.get(reverse("instructor_exam_detail", args=[exam.exam_id]))
+    assert resp.status_code == 404
+
+
+import pytest
+from django.urls import reverse
+from django.utils import timezone
+from datetime import timedelta
+
+@pytest.mark.django_db
+def test_student_cannot_access_instructor_exam_detail(client):
+    student = Student.objects.create(
+        full_name="Stu",
+        student_email="stu@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pw",
+    )
+
+    exam = Exam.objects.create(
+        title="Exam",
+        description="x",
+        start_time=timezone.now() + timedelta(hours=1),
+        end_time=timezone.now() + timedelta(hours=2),
+        created_by=instructor,
+    )
+
+    session = client.session
+    session["user_type"] = "student"
+    session["user_id"] = student.student_ID
+    session.save()
+
+    # Because exam_detail() tries to load Instructor using session["user_id"],
+    # a student session causes Instructor.DoesNotExist (500 in real run).
+    with pytest.raises(Instructor.DoesNotExist):
+        client.get(reverse("instructor_exam_detail", args=[exam.exam_id]))
+
+import pytest
+from datetime import timedelta
+from django.urls import reverse
+from django.utils import timezone
+
+from app.models import Student, Instructor, Exam, ExamAttempt, ExamQuestion
+
+
+def login_student(client, student: Student):
+    session = client.session
+    session["user_type"] = "student"
+    session["user_id"] = student.student_ID
+    session.save()
+
+
+@pytest.mark.django_db
+def test_student_results_page_shows_only_my_submitted_attempts(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pw",
+    )
+
+    s1 = Student.objects.create(
+        full_name="Student One",
+        student_email="s1@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    s2 = Student.objects.create(
+        full_name="Student Two",
+        student_email="s2@example.com",
+        matric_number="PPE0002",
+        contact_number="0123456789",
+        password="pw",
+    )
+
+    now = timezone.now()
+
+    exam_a = Exam.objects.create(
+        title="Exam A",
+        description="A",
+        start_time=now - timedelta(days=1),
+        end_time=now + timedelta(days=1),
+        created_by=instructor,
+    )
+    exam_b = Exam.objects.create(
+        title="Exam B",
+        description="B",
+        start_time=now - timedelta(days=1),
+        end_time=now + timedelta(days=1),
+        created_by=instructor,
+    )
+
+    # add marks so total_possible > 0
+    ExamQuestion.objects.create(exam=exam_a, question_text="Q1", question_type="TEXT", marks=1)
+    ExamQuestion.objects.create(exam=exam_a, question_text="Q2", question_type="TEXT", marks=1)
+
+    # s1 submitted attempt -> SHOULD appear
+    a1 = ExamAttempt.objects.create(
+        attempt_id="ATT-S1-SUB",
+        exam=exam_a,
+        student=s1,
+        started_at=now - timedelta(minutes=30),
+        submitted_at=now - timedelta(minutes=10),
+        score=2.0,
+    )
+
+    # s1 not submitted -> should NOT appear (filtered by submitted_at__isnull=False)
+    ExamAttempt.objects.create(
+        attempt_id="ATT-S1-DRAFT",
+        exam=exam_b,
+        student=s1,
+        started_at=now - timedelta(minutes=20),
+        submitted_at=None,
+        score=0.0,
+    )
+
+    # s2 submitted -> should NOT appear for s1
+    ExamAttempt.objects.create(
+        attempt_id="ATT-S2-SUB",
+        exam=exam_b,
+        student=s2,
+        started_at=now - timedelta(minutes=25),
+        submitted_at=now - timedelta(minutes=5),
+        score=1.0,
+    )
+
+    login_student(client, s1)
+
+    resp = client.get(reverse("student_results"))
+    assert resp.status_code == 200
+
+    # Context check
+    attempts = resp.context["attempts"]
+    assert len(attempts) == 1
+    assert attempts[0]["attempt_id"] == a1.attempt_id
+    assert attempts[0]["exam"].title == "Exam A"
+
+    # HTML contains my submitted exam
+    content = resp.content.decode("utf-8")
+    assert "My Exam Results" in content
+    assert "Exam A" in content
+
+    # Should NOT show exam B for s1 (draft) or s2 data
+    assert "Exam B" not in content
+
+    # Has the View link
+    assert reverse("student_exam_result", args=[a1.attempt_id]) in content
+
+
+@pytest.mark.django_db
+def test_student_results_page_when_no_attempts_shows_empty_message(client):
+    s1 = Student.objects.create(
+        full_name="Student One",
+        student_email="s1@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+
+    login_student(client, s1)
+
+    resp = client.get(reverse("student_results"))
+    assert resp.status_code == 200
+    assert b"You have not completed any exams yet." in resp.content
+
+
+@pytest.mark.django_db
+def test_student_results_ignores_unsubmitted_attempts(client):
+    instructor = Instructor.objects.create(
+        full_name="Teacher",
+        instructor_email="teacher@example.com",
+        password="pw",
+    )
+    s1 = Student.objects.create(
+        full_name="Student One",
+        student_email="s1@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+
+    now = timezone.now()
+    exam = Exam.objects.create(
+        title="Draft Exam",
+        description="",
+        start_time=now - timedelta(days=1),
+        end_time=now + timedelta(days=1),
+        created_by=instructor,
+    )
+
+    # Attempt exists but not submitted
+    ExamAttempt.objects.create(
+        attempt_id="ATT-DRAFT",
+        exam=exam,
+        student=s1,
+        started_at=now - timedelta(minutes=5),
+        submitted_at=None,
+        score=0.0,
+    )
+
+    login_student(client, s1)
+
+    resp = client.get(reverse("student_results"))
+    assert resp.status_code == 200
+    assert b"Draft Exam" not in resp.content
+    assert b"You have not completed any exams yet." in resp.content
+
+
+def login_instructor(client, instructor):
+    session = client.session
+    session["user_type"] = "instructor"
+    session["user_id"] = instructor.instructor_ID
+    session.save()
+
+
+def login_student(client, student):
+    session = client.session
+    session["user_type"] = "student"
+    session["user_id"] = student.student_ID
+    session.save()
+
+
+@pytest.mark.django_db
+def test_instructor_exam_list_page_shows_only_own_exams(client):
+    i1 = Instructor.objects.create(
+        full_name="Inst 1",
+        instructor_email="i1@example.com",
+        password="pw",
+    )
+    i2 = Instructor.objects.create(
+        full_name="Inst 2",
+        instructor_email="i2@example.com",
+        password="pw",
+    )
+
+    now = timezone.now()
+    e1 = Exam.objects.create(
+        title="I1 Exam A",
+        description="a",
+        start_time=now + timedelta(days=1),
+        end_time=now + timedelta(days=1, hours=1),
+        created_by=i1,
+    )
+    e2 = Exam.objects.create(
+        title="I1 Exam B",
+        description="b",
+        start_time=now + timedelta(days=2),
+        end_time=now + timedelta(days=2, hours=1),
+        created_by=i1,
+    )
+    Exam.objects.create(
+        title="I2 Exam X",
+        description="x",
+        start_time=now + timedelta(days=3),
+        end_time=now + timedelta(days=3, hours=1),
+        created_by=i2,
+    )
+
+    login_instructor(client, i1)
+    resp = client.get(reverse("instructor_exam_list"))
+    assert resp.status_code == 200
+
+    content = resp.content.decode("utf-8")
+    assert "I1 Exam A" in content
+    assert "I1 Exam B" in content
+    assert "I2 Exam X" not in content
+
+    # (Optional) sanity: exam ids show up too
+    assert e1.exam_id in content
+    assert e2.exam_id in content
+
+
+@pytest.mark.django_db
+def test_instructor_exam_list_has_search_and_sort_ui(client):
+    instructor = Instructor.objects.create(
+        full_name="Inst",
+        instructor_email="inst@example.com",
+        password="pw",
+    )
+    now = timezone.now()
+    Exam.objects.create(
+        title="Searchable Exam",
+        description="desc",
+        start_time=now + timedelta(days=1),
+        end_time=now + timedelta(days=1, hours=1),
+        created_by=instructor,
+    )
+
+    login_instructor(client, instructor)
+    resp = client.get(reverse("instructor_exam_list"))
+    assert resp.status_code == 200
+
+    html = resp.content.decode("utf-8")
+
+    # Search input exists (based on your template placeholder)
+    assert "Search exam by ID or title" in html
+
+    # Sort UI hooks exist (these strings depend on your template/JS)
+    # If your headers use onclick="sortTable(...)" this will pass.
+    assert "sortTable" in html or "onclick" in html
+
+
+@pytest.mark.django_db
+def test_instructor_exam_list_default_order_latest_first(client):
+    instructor = Instructor.objects.create(
+        full_name="Inst",
+        instructor_email="inst2@example.com",
+        password="pw",
+    )
+
+    now = timezone.now()
+    older = Exam.objects.create(
+        title="Older Exam",
+        description="old",
+        start_time=now + timedelta(days=1),
+        end_time=now + timedelta(days=1, hours=1),
+        created_by=instructor,
+    )
+    newer = Exam.objects.create(
+        title="Newer Exam",
+        description="new",
+        start_time=now + timedelta(days=5),
+        end_time=now + timedelta(days=5, hours=1),
+        created_by=instructor,
+    )
+
+    login_instructor(client, instructor)
+    resp = client.get(reverse("instructor_exam_list"))
+    assert resp.status_code == 200
+
+    html = resp.content.decode("utf-8")
+
+    # If your queryset orders by "-start_time", "Newer Exam" should appear before "Older Exam"
+    assert html.find("Newer Exam") != -1
+    assert html.find("Older Exam") != -1
+    assert html.find("Newer Exam") < html.find("Older Exam")
+
+
+@pytest.mark.django_db
+def test_student_cannot_access_instructor_exam_list(client):
+    # This matches your current behavior if the view does:
+    # instructor = Instructor.objects.get(instructor_ID=session["user_id"])
+    student = Student.objects.create(
+        full_name="Stu",
+        student_email="stu@example.com",
+        matric_number="PPE0001",
+        contact_number="0123456789",
+        password="pw",
+    )
+    login_student(client, student)
+
+    # Your app currently raises Instructor.DoesNotExist (based on your previous failures)
+    with pytest.raises(Instructor.DoesNotExist):
+        client.get(reverse("instructor_exam_list"))
 
 

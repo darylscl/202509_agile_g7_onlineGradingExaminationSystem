@@ -11,12 +11,31 @@ from django.shortcuts import get_object_or_404
 from django.contrib import messages
 import re
 from django.utils.dateparse import parse_datetime
+from django.db.models import Avg, Max, Count
+from zoneinfo import ZoneInfo
+from datetime import datetime
 
 EMAIL_REGEX = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
 PASSWORD_REGEX = r"^(?=.*[A-Za-z])(?=.*\d).{8,}$"
 CONTACT_REGEX = r"^\d{10,11}$"
 MATRIC_REGEX = r"^PPE\d{4}$"
 
+KL = ZoneInfo("Asia/Kuala_Lumpur")
+UTC = ZoneInfo("UTC")
+
+
+def kl_date_time_to_utc(date_str: str, time_str: str):
+    """
+    date_str: 'YYYY-MM-DD'
+    time_str: 'HH:MM'
+    returns: aware datetime in UTC
+    """
+    naive = datetime.fromisoformat(f"{date_str}T{time_str}")   # datetime-local style
+    aware_kl = naive.replace(tzinfo=KL)
+    return aware_kl.astimezone(UTC)
+
+def now_kl():
+    return timezone.now().astimezone(KL)
 #todo list:
 # Update marks not able to save error
 
@@ -213,17 +232,57 @@ def student_profile(request):
     student_id = request.session.get("user_id")
     student = get_object_or_404(Student, student_ID=student_id)
 
+    attempts_qs = (
+        ExamAttempt.objects
+        .filter(student=student)
+        .select_related("exam")
+        .order_by("-submitted_at", "-started_at")
+    )
+    submitted_qs = attempts_qs.filter(submitted_at__isnull=False)
+
+    student_stats = {
+        "total_attempts": attempts_qs.count(),
+        "submitted_count": submitted_qs.count(),
+        "avg_score": submitted_qs.aggregate(a=Avg("score"))["a"],
+        "best_score": submitted_qs.aggregate(m=Max("score"))["m"],
+        "last_submitted": submitted_qs.aggregate(m=Max("submitted_at"))["m"],
+    }
+    recent_attempts = attempts_qs[:10]
+
+    def ctx():
+        return {
+            "student": student,
+            "attempts": attempts_qs,          
+            "student_stats": student_stats,
+            "recent_attempts": recent_attempts,
+        }
+
     if request.method == "POST":
         full_name = request.POST.get("full_name")
         email = request.POST.get("student_email")
         matric = request.POST.get("matric_number")
         contact = request.POST.get("contact_number")
 
-        # simple validation
+        matric = (matric or "").strip()
+        contact_raw = (contact or "").strip()
+        contact = normalize_phone(contact_raw)
+
         if not full_name or not email or not matric:
             messages.error(request, "Full name, email and matric number are required.")
-            return render(request, "app/student/profile.html", {"student": student})
+            return render(request, "app/student/profile.html", ctx())
 
+        if not MATRIC_RE.match(matric):
+            messages.error(request, "Matric number must be 6–15 characters, letters/numbers only.")
+            return render(request, "app/student/profile.html", ctx())
+
+        if contact_raw and re.search(r"[A-Za-z]", contact_raw):
+            messages.error(request, "Invalid phone number. Digits only.")
+            return render(request, "app/student/profile.html", ctx())
+
+        # then validate MY format
+        if contact and not is_valid_my_phone(contact):
+            messages.error(request, "Invalid phone number. Use 01XXXXXXXX or +601XXXXXXXX.")
+            return render(request, "app/student/profile.html", ctx())
         try:
             validate_email(email)
         except ValidationError:
@@ -232,7 +291,7 @@ def student_profile(request):
 
         if Student.objects.filter(student_email=email).exclude(student_ID=student.student_ID).exists():
             messages.error(request, "This email is already used by another student.")
-            return render(request, "app/student/profile.html", {"student": student})
+            return render(request, "app/student/profile.html", ctx())
 
         if Student.objects.filter(matric_number=matric).exclude(student_ID=student.student_ID).exists():
             messages.error(request, "This matric number is already used by another student.")
@@ -241,13 +300,13 @@ def student_profile(request):
         student.full_name = full_name
         student.student_email = email
         student.matric_number = matric
-        student.contact_number = contact
+        student.contact_number = contact   
         student.save()
-
         messages.success(request, "Profile updated successfully.")
         return redirect("student_profile")
 
-    return render(request, "app/student/profile.html", {"student": student})
+    # GET
+    return render(request, "app/student/profile.html", ctx())
 
 
 @instructor_required
@@ -255,25 +314,77 @@ def instructor_profile(request):
     instructor_id = request.session.get("user_id")
     instructor = get_object_or_404(Instructor, instructor_ID=instructor_id)
 
-    if request.method == "POST":
-        full_name = request.POST.get("full_name")
-        email = request.POST.get("instructor_email")
-        contact = request.POST.get("contact_number")
-        department = request.POST.get("department")
+    exams_qs = (
+        Exam.objects
+        .filter(created_by=instructor)
+        .prefetch_related("questions")
+        .order_by("-start_time")
+    )
 
+    now = timezone.now()
+    open_exam_count = exams_qs.filter(start_time__lte=now, end_time__gte=now).count()
+
+    attempts_qs = (
+        ExamAttempt.objects
+        .filter(exam__created_by=instructor, submitted_at__isnull=False)
+        .select_related("exam", "student")
+        .order_by("-submitted_at")
+    )
+
+    instructor_stats = {
+        "total_exams": exams_qs.count(),
+        "open_exams": open_exam_count,
+        "total_submissions": attempts_qs.count(),
+        "avg_score": attempts_qs.aggregate(a=Avg("score"))["a"],
+        "best_score": attempts_qs.aggregate(m=Max("score"))["m"],
+    }
+
+    recent_submissions = attempts_qs[:10]
+
+    def ctx():
+        return {
+            "instructor": instructor,
+            "exams": exams_qs,  # keep template compatible
+            "instructor_stats": instructor_stats,
+            "recent_submissions": recent_submissions,
+        }
+
+    if request.method == "POST":
+        full_name = (request.POST.get("full_name") or "").strip()
+        email = (request.POST.get("instructor_email") or "").strip()
+        contact = (request.POST.get("contact_number") or "").strip()
+        department = (request.POST.get("department") or "").strip()
+
+        contact_raw = contact
+        contact = normalize_phone(contact_raw)
+
+        # If user typed something but it becomes empty after normalization -> invalid
+        if contact_raw and not contact:
+            messages.error(request, "Invalid phone number. Use 01XXXXXXXX or +601XXXXXXXX.")
+            return render(request, "app/instructor/profile.html", ctx())
+
+        if contact_raw and re.search(r"[A-Za-z]", contact_raw):
+            messages.error(request, "Invalid phone number. Digits only.")
+            return render(request, "app/student/profile.html", ctx())
+
+        # then validate MY format
+        if contact and not is_valid_my_phone(contact):
+            messages.error(request, "Invalid phone number. Use 01XXXXXXXX or +601XXXXXXXX.")
+            return render(request, "app/student/profile.html", ctx())
+        
         if not full_name or not email:
             messages.error(request, "Full name and email are required.")
-            return render(request, "app/instructor/profile.html", {"instructor": instructor})
+            return render(request, "app/instructor/profile.html", ctx())
 
         try:
             validate_email(email)
         except ValidationError:
             messages.error(request, "Invalid email format.")
-            return render(request, "app/instructor/profile.html", {"instructor": instructor})
+            return render(request, "app/instructor/profile.html", ctx())
 
         if Instructor.objects.filter(instructor_email=email).exclude(instructor_ID=instructor.instructor_ID).exists():
             messages.error(request, "This email is already used by another instructor.")
-            return render(request, "app/instructor/profile.html", {"instructor": instructor})
+            return render(request, "app/instructor/profile.html", ctx())
 
         instructor.full_name = full_name
         instructor.instructor_email = email
@@ -284,7 +395,7 @@ def instructor_profile(request):
         messages.success(request, "Profile updated successfully.")
         return redirect("instructor_profile")
 
-    return render(request, "app/instructor/profile.html", {"instructor": instructor})
+    return render(request, "app/instructor/profile.html", ctx())
 
 
 
@@ -427,84 +538,74 @@ def exam_create(request):
     if exam_id:
         exam = Exam.objects.filter(exam_id=exam_id, created_by=instructor).first()
 
+    # ---------------- CREATE EXAM ----------------
     if request.method == "POST" and "create_exam" in request.POST:
         title = (request.POST.get("title") or "").strip()
         description = request.POST.get("description") or ""
-        start_date = request.POST.get("start_date") or ""
-        start_time_part = request.POST.get("start_time") or ""
-        end_date = request.POST.get("end_date") or ""
-        end_time_part = request.POST.get("end_time") or ""
-        
+
+        start_date = (request.POST.get("start_date") or "").strip()
+        start_time_part = (request.POST.get("start_time") or "").strip()
+        end_date = (request.POST.get("end_date") or "").strip()
+        end_time_part = (request.POST.get("end_time") or "").strip()
 
         if not title or not start_date or not start_time_part or not end_date or not end_time_part:
-            messages.error(
-                request,
-                "All fields (title, start time, end time) are required.",
-            )
-            return render(
-                request,
-                "app/instructor/exam_form.html",
-                {"exam": exam, "questions": exam.questions.all() if exam else []},
-            )
-            
-        start_raw = f"{start_date} {start_time_part}"
-        end_raw = f"{end_date} {end_time_part}"
-        start_time = parse_datetime(start_raw)
-        end_time = parse_datetime(end_raw)
+            messages.error(request, "All fields (title, start time, end time) are required.")
+            return render(request, "app/instructor/exam_form.html", {
+                "exam": exam,
+                "questions": exam.questions.all() if exam else [],
+            })
 
-        if not start_time or not end_time:
+        # Convert KL input -> UTC datetimes
+        try:
+            start_time = kl_date_time_to_utc(start_date, start_time_part)
+            end_time = kl_date_time_to_utc(end_date, end_time_part)
+        except ValueError:
             messages.error(request, "Please enter a valid date and time.")
-            return render(
-                request,
-                "app/instructor/exam_form.html",
-                {"exam": exam, "questions": exam.questions.all() if exam else []},
-            )
+            return render(request, "app/instructor/exam_form.html", {
+                "exam": exam,
+                "questions": exam.questions.all() if exam else [],
+            })
 
-        if timezone.is_naive(start_time):
-            start_time = timezone.make_aware(start_time)
-        if timezone.is_naive(end_time):
-            end_time = timezone.make_aware(end_time)
-            
+        # Validate order
         if end_time <= start_time:
             messages.error(request, "End time must be after start time.")
-            return render(
-                request,
-                "app/instructor/exam_form.html",
-                {"exam": exam, "questions": exam.questions.all() if exam else []},
-            )
-            
-        now = timezone.now()
-        if start_time < now:
-            messages.error(request, "Start time cannot be earlier than the current date & time.")
-            return render(request, "app/instructor/exam_form.html",
-                          {"exam": exam, "questions": exam.questions.all() if exam else []})
+            return render(request, "app/instructor/exam_form.html", {
+                "exam": exam,
+                "questions": exam.questions.all() if exam else [],
+            })
+
+        # Validate "not earlier than now" in KL (user perspective)
+        if start_time.astimezone(KL) < now_kl():
+            messages.error(request, "Start time cannot be earlier than current Malaysia time.")
+            return render(request, "app/instructor/exam_form.html", {
+                "exam": exam,
+                "questions": exam.questions.all() if exam else [],
+            })
 
         try:
             exam = Exam.objects.create(
                 title=title,
                 description=description,
-                start_time=start_time,
-                end_time=end_time,
+                start_time=start_time,  # UTC
+                end_time=end_time,      # UTC
                 created_by=instructor,
             )
         except ValidationError as e:
             messages.error(request, e.messages[0])
-            return render(
-                request,
-                "app/instructor/exam_form.html",
-                {"exam": None, "questions": []},
-            )
+            return render(request, "app/instructor/exam_form.html", {"exam": None, "questions": []})
 
         return redirect(f"/instructor/exams/create/?exam_id={exam.exam_id}")
 
+    # ---------------- ADD QUESTION ----------------
     if request.method == "POST" and "add_question" in request.POST:
         exam = Exam.objects.get(exam_id=exam_id, created_by=instructor)
-        
+
         marks = request.POST.get("marks", "1")
         try:
             marks = float(marks)
-        except:
+        except Exception:
             marks = 1
+
         question = ExamQuestion.objects.create(
             exam=exam,
             question_text=request.POST.get("question_text"),
@@ -554,23 +655,19 @@ def exam_update(request, exam_id):
         end_time_part = request.POST.get("end_time") or ""
 
         if not title or not start_date or not start_time_part or not end_date or not end_time_part:
-            messages.error(request, "All fields (title, start time, end time) are required.")
+            messages.error(request, "All fields (title, start date/time, end date/time) are required.")
             return render(request, "app/instructor/exam_edit.html", {"exam": exam})
 
-        start_raw = f"{start_date} {start_time_part}"
-        end_raw = f"{end_date} {end_time_part}"
-
-        start_time = parse_datetime(start_raw)
-        end_time = parse_datetime(end_raw)
-
-        if not start_time or not end_time:
+        try:
+            start_time = kl_date_time_to_utc(start_date, start_time_part)
+            end_time = kl_date_time_to_utc(end_date, end_time_part)
+        except ValueError:
             messages.error(request, "Please enter a valid date and time.")
             return render(request, "app/instructor/exam_edit.html", {"exam": exam})
 
-        if timezone.is_naive(start_time):
-            start_time = timezone.make_aware(start_time)
-        if timezone.is_naive(end_time):
-            end_time = timezone.make_aware(end_time)
+        if end_time <= start_time:
+            messages.error(request, "End time must be after start time.")
+            return render(request, "app/instructor/exam_edit.html", {"exam": exam})
 
         exam.title = title
         exam.description = description
@@ -578,7 +675,7 @@ def exam_update(request, exam_id):
         exam.end_time = end_time
 
         try:
-            exam.full_clean()  
+            exam.full_clean()
             exam.save()
         except ValidationError as e:
             messages.error(request, e.messages[0])
@@ -914,3 +1011,21 @@ def exam_result(request, attempt_id):
         {"attempt": attempt, "answers": answers, "total_possible": total_possible, "total_awarded": total_awarded, "grade": grade},
     )
 
+def normalize_phone(raw: str) -> str:
+    if not raw:
+        return ""
+    # remove spaces, dashes, parentheses
+    return re.sub(r"[^\d+]", "", raw).strip()
+
+def is_valid_my_phone(phone: str) -> bool:
+    # Accept:
+    # 01XXXXXXXX (10-11 digits)
+    # +601XXXXXXXX (11-12 digits with +)
+    if phone.startswith("+60"):
+        rest = phone[3:]
+        return rest.isdigit() and (9 <= len(rest) <= 10) and rest.startswith("1")
+    if phone.startswith("0"):
+        return phone.isdigit() and (10 <= len(phone) <= 11) and phone.startswith("01")
+    return False
+
+MATRIC_RE = re.compile(r"^[A-Za-z0-9]{6,15}$")
