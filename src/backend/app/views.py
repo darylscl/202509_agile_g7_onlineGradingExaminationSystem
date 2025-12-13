@@ -15,12 +15,31 @@ from django.db.models import Avg, Max, Count
 from zoneinfo import ZoneInfo
 from datetime import datetime
 import json
+from django.db.models import Avg, Max, Count
+from zoneinfo import ZoneInfo
+from datetime import datetime
 
 EMAIL_REGEX = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
 PASSWORD_REGEX = r"^(?=.*[A-Za-z])(?=.*\d).{8,}$"
 CONTACT_REGEX = r"^\d{10,11}$"
 MATRIC_REGEX = r"^PPE\d{4}$"
 
+KL = ZoneInfo("Asia/Kuala_Lumpur")
+UTC = ZoneInfo("UTC")
+
+
+def kl_date_time_to_utc(date_str: str, time_str: str):
+    """
+    date_str: 'YYYY-MM-DD'
+    time_str: 'HH:MM'
+    returns: aware datetime in UTC
+    """
+    naive = datetime.fromisoformat(f"{date_str}T{time_str}")   # datetime-local style
+    aware_kl = naive.replace(tzinfo=KL)
+    return aware_kl.astimezone(UTC)
+
+def now_kl():
+    return timezone.now().astimezone(KL)
 KL = ZoneInfo("Asia/Kuala_Lumpur")
 UTC = ZoneInfo("UTC")
 
@@ -1388,6 +1407,23 @@ def exam_result(request, attempt_id):
     )
 
 def normalize_phone(raw: str) -> str:
+    if not raw:
+        return ""
+    # remove spaces, dashes, parentheses
+    return re.sub(r"[^\d+]", "", raw).strip()
+
+def is_valid_my_phone(phone: str) -> bool:
+    # Accept:
+    # 01XXXXXXXX (10-11 digits)
+    # +601XXXXXXXX (11-12 digits with +)
+    if phone.startswith("+60"):
+        rest = phone[3:]
+        return rest.isdigit() and (9 <= len(rest) <= 10) and rest.startswith("1")
+    if phone.startswith("0"):
+        return phone.isdigit() and (10 <= len(phone) <= 11) and phone.startswith("01")
+    return False
+
+MATRIC_RE = re.compile(r"^[A-Za-z0-9]{6,15}$")def normalize_phone(raw: str) -> str:
     if not raw:
         return ""
     # remove spaces, dashes, parentheses
