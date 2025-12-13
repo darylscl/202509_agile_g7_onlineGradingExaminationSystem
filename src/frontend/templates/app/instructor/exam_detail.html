@@ -62,9 +62,14 @@
                         <h3 class="fw-bold">{{ questions|length }}</h3>
                     </div>
 
-                    <a class="btn btn-warning w-100"
+                    <a class="btn btn-warning w-100 mb-2"
                        href="{% url 'instructor_exam_update' exam.exam_id %}">
                         ✏️ Edit Exam Info
+                    </a>
+
+                    <a class="btn btn-primary w-100"
+                       href="{% url 'instructor_grade_distribution' exam.exam_id %}">
+                        📊 View Grade Distribution
                     </a>
                 </div>
 

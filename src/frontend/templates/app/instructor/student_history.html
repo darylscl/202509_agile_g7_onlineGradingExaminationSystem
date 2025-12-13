@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Student History{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold text-white mb-0">{{ student.full_name }} — Performance History</h2>
+        <a class="btn btn-secondary" href="{% url 'instructor_profile' %}">Back</a>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 p-4 mb-4">
+        <h5 class="mb-3">Trend</h5>
+        <canvas id="historyChart" height="100"></canvas>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 p-4">
+        <h5 class="mb-3">Attempts</h5>
+        <table class="table table-hover table-borderless align-middle mb-0">
+            <thead style="background: #1b263b; color: #fff;">
+                <tr>
+                    <th>Exam</th>
+                    <th>Submitted At</th>
+                    <th>Score</th>
+                    <th>Percent</th>
+                    <th>View</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in attempts_list %}
+                {% with a=row.attempt %}
+                <tr>
+                    <td>{{ a.exam.title }} <small class="text-muted">({{ a.exam.exam_id }})</small></td>
+                    <td>{{ a.submitted_at|date:"Y-m-d H:i" }}</td>
+                    <td>{% if a.score is not None %}{{ a.score|floatformat:2 }}{% else %}<span class="text-muted">Not graded</span>{% endif %}</td>
+                    <td>{% if row.percent is not None %}{{ row.percent|floatformat:1 }}%{% else %}-{% endif %}</td>
+                    <td><a href="{% url 'instructor_view_submission' a.attempt_id %}" class="btn btn-sm btn-info">View</a></td>
+                </tr>
+                {% endwith %}
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-4 text-muted">No attempts found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function(){
+    const labels = {{ chart_labels_json|safe }};
+    const data = {{ chart_percents_json|safe }};
+
+    const ctx = document.getElementById('historyChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Percent',
+                data: data,
+                fill: false,
+                borderColor: 'rgba(75, 192, 192, 1)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            scales: { y: { beginAtZero: true, max: 100 } },
+            plugins: { legend: { display: false } }
+        }
+    });
+})();
+</script>
+
+{% endblock %}

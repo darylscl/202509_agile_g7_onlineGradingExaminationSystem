@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Grade Distribution{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold text-white mb-0">Grade Distribution — {{ exam.title }}</h2>
+        <a class="btn btn-secondary" href="{% url 'instructor_exam_detail' exam.exam_id %}">Back</a>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 p-4 mb-4">
+        <div class="mb-3">
+            <strong>Total submissions:</strong> {{ total_submissions }}
+            {% if avg_score %} • <strong>Average:</strong> {{ avg_score|floatformat:2 }}{% endif %}
+        </div>
+
+        <canvas id="gradeChart" height="120"></canvas>
+    </div>
+</div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    (function() {
+        const labels = {{ labels_json|safe }};
+        const counts = {{ counts_json|safe }};
+
+        const ctx = document.getElementById('gradeChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Number of Students',
+                    data: counts,
+                    backgroundColor: 'rgba(54, 162, 235, 0.7)'
+                }]
+            },
+            options: {
+                scales: {
+                    y: { beginAtZero: true, precision:0 }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    })();
+</script>
+
+{% endblock %}
