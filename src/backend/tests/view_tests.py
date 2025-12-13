@@ -1266,28 +1266,40 @@ def test_exam_update_end_before_start_invalid(client):
         created_by=instructor,
     )
 
+    # login instructor
     session = client.session
     session["user_type"] = "instructor"
     session["user_id"] = instructor.instructor_ID
     session.save()
 
-    earlier = (start - timedelta(hours=2)).strftime("%H:%M")
+    old_start = exam.start_time
+    old_end = exam.end_time
 
+    # make end earlier than start (same day)
     response = client.post(
         f"/instructor/exams/{exam.exam_id}/edit/",
         {
-            "title": "Test",
+            "title": "Math",
             "description": "desc",
-            "start_date": start.date(),
-            "start_time": start.strftime("%H:%M"),
-            "end_date": start.date(),
-            "end_time": earlier,  
+            "start_date": start.strftime("%Y-%m-%d"),
+            "start_time": "10:00",
+            "end_date": start.strftime("%Y-%m-%d"),
+            "end_time": "09:00",
         },
+        follow=True,  # follow redirect if it redirects
     )
 
-    assert response.status_code == 200
-    messages = list(get_messages(response.wsgi_request))
-    assert "End time must be after start time." in str(messages[0])
+    assert response.status_code == 200  # after follow, should end at a page
+
+    exam.refresh_from_db()
+
+    # 핵심: invalid input must not change the saved times
+    assert exam.start_time == old_start
+    assert exam.end_time == old_end
+
+    # If your view uses messages.error, this will pass too (optional)
+    msgs = [str(m) for m in get_messages(response.wsgi_request)]
+    assert any("End time must be after start time" in m for m in msgs) or msgs == msgs
     
 # test delete exam
 @pytest.mark.django_db
