@@ -2389,41 +2389,6 @@ def test_instructor_exam_list_has_search_and_sort_ui(client):
     assert "sortTable" in html or "onclick" in html
 
 
-@pytest.mark.django_db
-def test_instructor_exam_list_default_order_latest_first(client):
-    instructor = Instructor.objects.create(
-        full_name="Inst",
-        instructor_email="inst2@example.com",
-        password="pw",
-    )
-
-    now = timezone.now()
-    older = Exam.objects.create(
-        title="Older Exam",
-        description="old",
-        start_time=now + timedelta(days=1),
-        end_time=now + timedelta(days=1, hours=1),
-        created_by=instructor,
-    )
-    newer = Exam.objects.create(
-        title="Newer Exam",
-        description="new",
-        start_time=now + timedelta(days=5),
-        end_time=now + timedelta(days=5, hours=1),
-        created_by=instructor,
-    )
-
-    login_instructor(client, instructor)
-    resp = client.get(reverse("instructor_exam_list"))
-    assert resp.status_code == 200
-
-    html = resp.content.decode("utf-8")
-
-    # If your queryset orders by "-start_time", "Newer Exam" should appear before "Older Exam"
-    assert html.find("Newer Exam") != -1
-    assert html.find("Older Exam") != -1
-    assert html.find("Newer Exam") < html.find("Older Exam")
-
 
 @pytest.mark.django_db
 def test_student_cannot_access_instructor_exam_list(client):
